@@ -1,14 +1,15 @@
 """
-Script COMPLETO para avaliar prompts otimizados.
+Script para avaliar prompts otimizados via langsmith.evaluate().
 
 Este script:
 1. Carrega dataset de avaliação de arquivo .jsonl (datasets/bug_to_user_story.jsonl)
-2. Cria/atualiza dataset no LangSmith
+2. Cria/reutiliza dataset no LangSmith
 3. Puxa prompts otimizados do LangSmith Hub (fonte única de verdade)
-4. Executa prompts contra o dataset
-5. Calcula 5 métricas (Helpfulness, Correctness, F1-Score, Clarity, Precision)
-6. Publica resultados no dashboard do LangSmith
-7. Exibe resumo no terminal
+4. Executa langsmith.evaluate() — cria Experiments visíveis no dashboard
+5. Calcula 5 métricas: Helpfulness, Correctness, F1-Score, Clarity, Precision
+6. Exibe resumo no terminal
+
+Cada execução gera um Experiment único (timestamp no prefix), sem sobrescrever runs anteriores.
 
 Suporta múltiplos providers de LLM:
 - OpenAI (gpt-4o, gpt-4o-mini)
@@ -19,36 +20,48 @@ Configure o provider no arquivo .env através da variável LLM_PROVIDER.
 
 import os
 import sys
+sys.stdout.reconfigure(encoding='utf-8')
 import json
+import traceback
+from datetime import datetime
 from typing import List, Dict, Any
 from pathlib import Path
+
 from dotenv import load_dotenv
 from langsmith import Client
+from langsmith.evaluation import evaluate
 from langchain import hub
 from langchain_core.prompts import ChatPromptTemplate
+
 from utils import check_env_vars, format_score, print_section_header, get_llm as get_configured_llm
 from metrics import evaluate_f1_score, evaluate_clarity, evaluate_precision
 
 load_dotenv()
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# LLM
+# ─────────────────────────────────────────────────────────────────────────────
+
 def get_llm():
+    """Retorna LLM principal com temperatura 0 (respostas determinísticas)."""
     return get_configured_llm(temperature=0)
 
 
-def load_dataset_from_jsonl(jsonl_path: str) -> List[Dict[str, Any]]:
-    examples = []
+# ─────────────────────────────────────────────────────────────────────────────
+# Dataset
+# ─────────────────────────────────────────────────────────────────────────────
 
+def load_dataset_from_jsonl(jsonl_path: str) -> List[Dict[str, Any]]:
+    """Carrega exemplos de arquivo JSONL."""
+    examples = []
     try:
         with open(jsonl_path, 'r', encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
-                if line:  # Ignorar linhas vazias
-                    example = json.loads(line)
-                    examples.append(example)
-
+                if line:
+                    examples.append(json.loads(line))
         return examples
-
     except FileNotFoundError:
         print(f"❌ Arquivo não encontrado: {jsonl_path}")
         print("\nCertifique-se de que o arquivo datasets/bug_to_user_story.jsonl existe.")
@@ -62,47 +75,47 @@ def load_dataset_from_jsonl(jsonl_path: str) -> List[Dict[str, Any]]:
 
 
 def create_evaluation_dataset(client: Client, dataset_name: str, jsonl_path: str) -> str:
-    print(f"Criando dataset de avaliação: {dataset_name}...")
+    """Cria dataset no LangSmith ou reutiliza existente."""
+    print(f"Verificando dataset: {dataset_name}...")
 
     examples = load_dataset_from_jsonl(jsonl_path)
-
     if not examples:
         print("❌ Nenhum exemplo carregado do arquivo .jsonl")
         return dataset_name
 
-    print(f"   ✓ Carregados {len(examples)} exemplos do arquivo {jsonl_path}")
+    print(f"   ✓ {len(examples)} exemplos encontrados em {jsonl_path}")
 
     try:
-        datasets = client.list_datasets(dataset_name=dataset_name)
-        existing_dataset = None
+        existing = next(
+            (ds for ds in client.list_datasets(dataset_name=dataset_name)
+             if ds.name == dataset_name),
+            None
+        )
 
-        for ds in datasets:
-            if ds.name == dataset_name:
-                existing_dataset = ds
-                break
-
-        if existing_dataset:
+        if existing:
             print(f"   ✓ Dataset '{dataset_name}' já existe, usando existente")
-            return dataset_name
         else:
             dataset = client.create_dataset(dataset_name=dataset_name)
-
             for example in examples:
                 client.create_example(
                     dataset_id=dataset.id,
                     inputs=example["inputs"],
                     outputs=example["outputs"]
                 )
-
             print(f"   ✓ Dataset criado com {len(examples)} exemplos")
-            return dataset_name
 
     except Exception as e:
         print(f"   ⚠️  Erro ao criar dataset: {e}")
-        return dataset_name
 
+    return dataset_name
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Prompt
+# ─────────────────────────────────────────────────────────────────────────────
 
 def pull_prompt_from_langsmith(prompt_name: str) -> ChatPromptTemplate:
+    """Puxa prompt do LangSmith Hub com mensagens de erro detalhadas."""
     try:
         print(f"   Puxando prompt do LangSmith Hub: {prompt_name}")
         prompt = hub.pull(prompt_name)
@@ -140,78 +153,168 @@ def pull_prompt_from_langsmith(prompt_name: str) -> ChatPromptTemplate:
         raise
 
 
-def evaluate_prompt_on_example(
-    prompt_template: ChatPromptTemplate,
-    example: Any,
-    llm: Any
-) -> Dict[str, Any]:
-    try:
-        inputs = example.inputs if hasattr(example, 'inputs') else {}
-        outputs = example.outputs if hasattr(example, 'outputs') else {}
+# ─────────────────────────────────────────────────────────────────────────────
+# Função de predição (app)
+# ─────────────────────────────────────────────────────────────────────────────
 
-        chain = prompt_template | llm
+def make_predict(prompt_template: ChatPromptTemplate, llm):
+    """
+    Retorna a função predict usada pelo langsmith.evaluate().
 
-        response = chain.invoke(inputs)
-        answer = response.content
+    O langsmith.evaluate() passa o campo `inputs` de cada exemplo do dataset
+    e espera um dict de saída. O closure captura prompt_template e llm.
+    """
+    chain = prompt_template | llm
 
-        reference = outputs.get("reference", "") if isinstance(outputs, dict) else ""
+    def predict(inputs: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            response = chain.invoke(inputs)
+            answer = response.content if hasattr(response, 'content') else str(response)
+            return {"output": answer}
+        except Exception as e:
+            # Retorna output vazio para não quebrar o experimento.
+            # Os evaluators tratam output vazio retornando score 0.0.
+            print(f"   ⚠️  Erro na predição: {e}")
+            print(f"   {traceback.format_exc()}")
+            return {"output": ""}
 
-        if isinstance(inputs, dict):
-            question = inputs.get("question", inputs.get("bug_report", inputs.get("pr_title", "N/A")))
-        else:
-            question = "N/A"
+    return predict
 
-        return {
-            "answer": answer,
-            "reference": reference,
-            "question": question
-        }
 
-    except Exception as e:
-        print(f"      ⚠️  Erro ao avaliar exemplo: {e}")
-        import traceback
-        print(f"      Traceback: {traceback.format_exc()}")
-        return {
-            "answer": "",
-            "reference": "",
-            "question": ""
-        }
+# ─────────────────────────────────────────────────────────────────────────────
+# Evaluators
+# ─────────────────────────────────────────────────────────────────────────────
 
+def _extract_run_data(run, example) -> tuple:
+    """
+    Extrai (output, question, reference) do par run/example fornecido pelo
+    langsmith.evaluate():
+    - run.outputs: saída produzida pelo predict()
+    - example.inputs: inputs do dataset (bug_report, question, etc.)
+    - example.outputs: referência esperada do dataset
+    """
+    output = (run.outputs or {}).get("output", "")
+    inputs = example.inputs or {}
+    question = inputs.get("bug_report", inputs.get("question", inputs.get("pr_title", "")))
+    reference = (example.outputs or {}).get("reference", "")
+    return output, question, reference
+
+
+def evaluator_f1(run, example) -> Dict[str, Any]:
+    """Calcula F1-Score via LLM-as-Judge."""
+    output, question, reference = _extract_run_data(run, example)
+    if not output or not reference:
+        return {"key": "f1_score", "score": 0.0}
+    result = evaluate_f1_score(question, output, reference)
+    return {"key": "f1_score", "score": result["score"]}
+
+
+def evaluator_clarity(run, example) -> Dict[str, Any]:
+    """Avalia Clarity via LLM-as-Judge."""
+    output, question, reference = _extract_run_data(run, example)
+    if not output or not reference:
+        return {"key": "clarity", "score": 0.0}
+    result = evaluate_clarity(question, output, reference)
+    return {"key": "clarity", "score": result["score"]}
+
+
+def evaluator_precision(run, example) -> Dict[str, Any]:
+    """Avalia Precision via LLM-as-Judge."""
+    output, question, reference = _extract_run_data(run, example)
+    if not output or not reference:
+        return {"key": "precision", "score": 0.0}
+    result = evaluate_precision(question, output, reference)
+    return {"key": "precision", "score": result["score"]}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Orquestração do experimento
+# ─────────────────────────────────────────────────────────────────────────────
 
 def evaluate_prompt(
     prompt_name: str,
     dataset_name: str,
     client: Client
 ) -> Dict[str, float]:
+    """
+    Executa avaliação via langsmith.evaluate() e cria um Experiment no LangSmith.
+
+    Mantém a mesma saída do terminal (progresso [i/N] por exemplo).
+    O experiment_prefix inclui timestamp para garantir que cada execução
+    gere um Experiment único — nenhuma run sobrescreve outra.
+
+    Returns:
+        Dicionário com scores médios: f1_score, clarity, precision,
+        helpfulness, correctness.
+    """
     print(f"\n🔍 Avaliando: {prompt_name}")
 
+    prompt_template = pull_prompt_from_langsmith(prompt_name)
+
+    # Filtra apenas exemplos com bug_report e reference (mesma lógica do original)
+    all_examples = list(client.list_examples(dataset_name=dataset_name))
+    valid_examples = [e for e in all_examples
+                      if isinstance(e.inputs, dict) and "bug_report" in e.inputs
+                      and isinstance(e.outputs, dict) and e.outputs.get("reference")]
+    examples_to_eval = valid_examples[:10]
+    total = len(examples_to_eval)
+
+    print(f"   Dataset: {len(all_examples)} exemplos ({len(valid_examples)} com bug_report e reference)")
+
+    llm = get_llm()
+    predict = make_predict(prompt_template, llm)
+
+    # Prefix único por execução — garante novo Experiment no LangSmith a cada run
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    experiment_prefix = f"{prompt_name}-{timestamp}"
+
+    print("   Avaliando exemplos...")
+
     try:
-        prompt_template = pull_prompt_from_langsmith(prompt_name)
+        results = evaluate(
+            predict,
+            data=examples_to_eval,  # apenas os exemplos filtrados
+            evaluators=[
+                evaluator_f1,
+                evaluator_clarity,
+                evaluator_precision,
+            ],
+            experiment_prefix=experiment_prefix,
+            description=(
+                f"Avaliação automática do prompt '{prompt_name}' "
+                f"em {datetime.now().isoformat()}"
+            ),
+            max_concurrency=2,
+        )
 
-        examples = list(client.list_examples(dataset_name=dataset_name))
-        print(f"   Dataset: {len(examples)} exemplos")
+        # Itera resultados por exemplo, imprime progresso e coleta scores
+        f1_scores, clarity_scores, precision_scores = [], [], []
 
-        llm = get_llm()
+        for i, row in enumerate(results, 1):
+            # Extrai lista de EvaluationResult do row
+            if isinstance(row, dict):
+                eval_results = row.get("evaluation_results", {}).get("results", [])
+            else:
+                eval_results = getattr(getattr(row, "evaluation_results", None), "results", [])
 
-        f1_scores = []
-        clarity_scores = []
-        precision_scores = []
+            scores_by_key: Dict[str, float] = {}
+            for er in eval_results:
+                key = getattr(er, "key", None) or (er.get("key") if isinstance(er, dict) else None)
+                score = getattr(er, "score", None)
+                if score is None and isinstance(er, dict):
+                    score = er.get("score")
+                if key and score is not None:
+                    scores_by_key[key] = float(score)
 
-        print("   Avaliando exemplos...")
+            f1 = scores_by_key.get("f1_score", 0.0)
+            clarity = scores_by_key.get("clarity", 0.0)
+            precision = scores_by_key.get("precision", 0.0)
 
-        for i, example in enumerate(examples[:10], 1):
-            result = evaluate_prompt_on_example(prompt_template, example, llm)
+            f1_scores.append(f1)
+            clarity_scores.append(clarity)
+            precision_scores.append(precision)
 
-            if result["answer"]:
-                f1 = evaluate_f1_score(result["question"], result["answer"], result["reference"])
-                clarity = evaluate_clarity(result["question"], result["answer"], result["reference"])
-                precision = evaluate_precision(result["question"], result["answer"], result["reference"])
-
-                f1_scores.append(f1["score"])
-                clarity_scores.append(clarity["score"])
-                precision_scores.append(precision["score"])
-
-                print(f"      [{i}/{min(10, len(examples))}] F1:{f1['score']:.2f} Clarity:{clarity['score']:.2f} Precision:{precision['score']:.2f}")
+            print(f"      [{i}/{total}] F1:{f1:.2f} Clarity:{clarity:.2f} Precision:{precision:.2f}")
 
         avg_f1 = sum(f1_scores) / len(f1_scores) if f1_scores else 0.0
         avg_clarity = sum(clarity_scores) / len(clarity_scores) if clarity_scores else 0.0
@@ -225,21 +328,21 @@ def evaluate_prompt(
             "correctness": round(avg_correctness, 4),
             "f1_score": round(avg_f1, 4),
             "clarity": round(avg_clarity, 4),
-            "precision": round(avg_precision, 4)
+            "precision": round(avg_precision, 4),
         }
 
     except Exception as e:
-        print(f"   ❌ Erro na avaliação: {e}")
-        return {
-            "helpfulness": 0.0,
-            "correctness": 0.0,
-            "f1_score": 0.0,
-            "clarity": 0.0,
-            "precision": 0.0
-        }
+        print(f"   ❌ Erro ao executar experimento: {e}")
+        print(f"   {traceback.format_exc()}")
+        return {k: 0.0 for k in ["helpfulness", "correctness", "f1_score", "clarity", "precision"]}
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Exibição de resultados
+# ─────────────────────────────────────────────────────────────────────────────
 
 def display_results(prompt_name: str, scores: Dict[str, float]) -> bool:
+    """Exibe scores formatados no terminal e retorna se aprovado (média >= 0.9)."""
     print("\n" + "=" * 50)
     print(f"Prompt: {prompt_name}")
     print("=" * 50)
@@ -249,18 +352,17 @@ def display_results(prompt_name: str, scores: Dict[str, float]) -> bool:
     print(f"  - Correctness: {format_score(scores['correctness'], threshold=0.9)}")
 
     print("\nMétricas Customizadas:")
-    print(f"  - F1-Score: {format_score(scores['f1_score'], threshold=0.9)}")
-    print(f"  - Clarity: {format_score(scores['clarity'], threshold=0.9)}")
-    print(f"  - Precision: {format_score(scores['precision'], threshold=0.9)}")
+    print(f"  - F1-Score:    {format_score(scores['f1_score'], threshold=0.9)}")
+    print(f"  - Clarity:     {format_score(scores['clarity'], threshold=0.9)}")
+    print(f"  - Precision:   {format_score(scores['precision'], threshold=0.9)}")
 
     average_score = sum(scores.values()) / len(scores)
 
     print("\n" + "-" * 50)
-    print(f"📊 MÉDIA GERAL: {average_score:.4f}")
+    print(f"MÉDIA GERAL: {average_score:.4f}")
     print("-" * 50)
 
     passed = average_score >= 0.9
-
     if passed:
         print(f"\n✅ STATUS: APROVADO (média >= 0.9)")
     else:
@@ -269,6 +371,10 @@ def display_results(prompt_name: str, scores: Dict[str, float]) -> bool:
 
     return passed
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Entry point
+# ─────────────────────────────────────────────────────────────────────────────
 
 def main():
     print_section_header("AVALIAÇÃO DE PROMPTS OTIMIZADOS")
@@ -304,11 +410,12 @@ def main():
     create_evaluation_dataset(client, dataset_name, jsonl_path)
 
     print("\n" + "=" * 70)
-    print("PROMPTS PARA AVALIAR")
+    print("EXECUTANDO EXPERIMENTOS NO LANGSMITH")
     print("=" * 70)
-    print("\nEste script irá puxar prompts do LangSmith Hub.")
-    print("Certifique-se de ter feito push dos prompts antes de avaliar:")
+    print("\nCertifique-se de ter feito push dos prompts antes de avaliar:")
     print("  python src/push_prompts.py\n")
+    print("Cada execução cria um Experiment único (timestamp no prefix).")
+    print(f"Acompanhe em: https://smith.langchain.com/o/projects\n")
 
     prompts_to_evaluate = [
         "bug_to_user_story_v2",
@@ -323,30 +430,17 @@ def main():
 
         try:
             scores = evaluate_prompt(prompt_name, dataset_name, client)
-
             passed = display_results(prompt_name, scores)
             all_passed = all_passed and passed
-
-            results_summary.append({
-                "prompt": prompt_name,
-                "scores": scores,
-                "passed": passed
-            })
+            results_summary.append({"prompt": prompt_name, "scores": scores, "passed": passed})
 
         except Exception as e:
             print(f"\n❌ Falha ao avaliar '{prompt_name}': {e}")
             all_passed = False
-
             results_summary.append({
                 "prompt": prompt_name,
-                "scores": {
-                    "helpfulness": 0.0,
-                    "correctness": 0.0,
-                    "f1_score": 0.0,
-                    "clarity": 0.0,
-                    "precision": 0.0
-                },
-                "passed": False
+                "scores": {k: 0.0 for k in ["helpfulness", "correctness", "f1_score", "clarity", "precision"]},
+                "passed": False,
             })
 
     print("\n" + "=" * 50)
@@ -377,6 +471,7 @@ def main():
         print("2. Faça push novamente: python src/push_prompts.py")
         print("3. Execute: python src/evaluate.py novamente")
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())
