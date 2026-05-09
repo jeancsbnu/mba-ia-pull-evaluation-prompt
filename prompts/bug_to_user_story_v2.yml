@@ -12,15 +12,34 @@ bug_to_user_story_v2:
 
     Antes de gerar a resposta, raciocine internamente:
 
-    1. IDENTIFIQUE O USUÁRIO: Quem é afetado? Seja específico (ex: "cliente navegando na loja", "gerente de vendas", "usuário do app Android"). Dicas de persona: dashboards de métricas ou gestão de usuários → "administrador"; pipelines de CRM ou oportunidades de venda → "vendedor gerenciando oportunidades no pipeline"; formulários de cadastro ou criação de conta → "usuário criando uma conta". Use "o sistema" (ou "o sistema de <contexto>") como persona quando o bug envolve: validação de dados backend (estoque, permissões, integridade), race conditions, integrações entre sistemas (webhooks, APIs, gateways), ou regras de negócio executadas no servidor sem interação direta do usuário.
+    1. IDENTIFIQUE O USUÁRIO: consulte SEMPRE a TABELA DE PERSONAS abaixo antes de escrever. Procure os GATILHOS literais do relato e use a persona EXATAMENTE como escrita (sem variações como "usuário do sistema", "usuário da plataforma", "administrador do sistema").
+
+    TABELA DE PERSONAS (gatilho → persona OBRIGATÓRIA — não improvise):
+    | Gatilho no relato (palavras-chave) | Persona EXATA a usar |
+    |---|---|
+    | "Relatório de vendas", "data_venda", "filtro" + "registros" SQL, listagem de pedidos | "gerente de vendas" (NUNCA "administrador", "administrador do sistema", "usuário do sistema") |
+    | "Dashboard executivo", "executive-dashboard", "MRR", "SaaS B2B 500+ empresas", "forecasting estratégico", "relatórios gerenciais" para tomada de decisão | "usuário executivo (CEO, CFO, VP)" — frase completa, NUNCA "executivo" sozinho, NUNCA "usuário da plataforma" |
+    | "checkout", "finalizar compra", "cupom de desconto", "pagamento" no fluxo do cliente final (não auth, não estoque) | "cliente do e-commerce" ou "cliente finalizando minha compra" — NUNCA "usuário do sistema de checkout" |
+    | "app offline", "sync offline-first", "vendedores em campo" + mobile, "edita offline" | "usuário mobile trabalhando frequentemente offline" — NUNCA só "vendedor em campo" |
+    | Estoque limitado, race condition, "Cliente A vs Cliente B", reservas/cupons concorrentes | "o sistema de e-commerce" (ou "o sistema de <contexto>") — NUNCA "cliente"/"usuário" |
+    | Webhook de pagamento aprovado / notificação de pedido / status de transação | "o sistema de e-commerce" (PRIORITÁRIO — NUNCA "o sistema de pagamentos" para webhook entre gateway externo e e-commerce) |
+    | Outras integrações entre sistemas (APIs internas, gateway → módulo interno de pagamento) | "o sistema de <contexto específico>" (ex: "o sistema de gestão de assinaturas") |
+    | "/api/users/:id", controle de acesso, OWASP, vazamento de dados pessoais | "o sistema" (ou "o sistema de gestão de usuários") |
+    | Pipeline de CRM, oportunidade de venda, cálculo de desconto comercial | "vendedor gerenciando oportunidades no pipeline" |
+    | Dashboard de métricas operacionais, gestão administrativa de usuários | "administrador do sistema" |
+    | Formulário de cadastro, criação de conta, validação de campo de cadastro | "usuário criando uma conta" |
+    | App mobile Android/iOS com ANR, lista travando, threading | "usuário do app Android" / "usuário do app iOS" |
+    | Compatibilidade cross-browser (Firefox, Safari) | "cliente usando <navegador>" |
+    | Modal/menu lateral em dispositivo móvel (z-index, sobreposição em tela < 768px) | "usuário em dispositivo móvel" |
     2. CLASSIFIQUE A COMPLEXIDADE:
        - SIMPLES: relato de 1-2 frases descritivas, SEM steps to reproduce numerados, SEM logs/stack traces, SEM endpoints ou métricas de performance. Exemplos SIMPLES: "Botão não funciona", "Campo aceita email sem @", "Dashboard mostra 50 mas há 42", "Imagens não aparecem no Safari". → resposta termina após Critérios de Aceitação, SEM seções ##.
        - MÉDIO: relato com steps to reproduce explícitos, OU logs de servidor, OU endpoints/códigos HTTP, OU métricas de tempo (ex: "demora 120s", "ANR", "trava 5-10s"). Exemplos MÉDIOS: "Query demora 2 min — coluna sem índice", "App trava com 50+ itens — ANR na Thread principal". → adicionar seções ## após Critérios.
-       - COMPLEXO: múltiplas falhas ou impacto crítico em vários componentes.
+       - COMPLEXO: múltiplas falhas ou impacto crítico em vários componentes. ATENÇÃO: quando o relato lista 3 ou mais problemas numerados e distintos (ex: "1. SEGURANÇA", "2. INTEGRAÇÃO", "3. LÓGICA"), classifique OBRIGATORIAMENTE como COMPLEXO e use o formato === para toda a resposta, começando por === USER STORY PRINCIPAL ===.
        ATENÇÃO: critérios implícitos adicionados automaticamente pelo prompt NÃO mudam a classificação.
     3. MAPEIE O BUG: funcionalidade afetada, comportamento atual (incorreto), comportamento esperado, causa raiz (se inferível).
     4. LISTE OS DETALHES TÉCNICOS: preserve todos os números, endpoints, logs, códigos HTTP, valores e causas raiz mencionados — nada deve ser omitido.
-    5. ESCREVA A USER STORY: use exatamente a estrutura abaixo.
+    5. EXPLORE ABORDAGENS TÉCNICAS (Tree of Thought — APENAS para bugs COMPLEXOS): para cada categoria de problema do bug (ex: Conflito, Performance, Cache, Concorrência), explore mentalmente 2-3 abordagens técnicas alternativas e selecione a mais alinhada com o domínio. Considere: padrões de arquitetura (CRDTs vs Vector Clocks vs last-write-wins; eager loading com JOIN vs materialized views vs cache em memória; lock pessimista SELECT FOR UPDATE vs Redis INCR atômico vs idempotency key); estruturas de dados (operation log com client_timestamp; chunked upload com checkpoints; batch processing com SQLite cursor); ferramentas concretas (Sidekiq/Bull para job queues; DOMPurify para XSS; circuit breaker para integrações instáveis). Esta exploração informa quais termos LITERAIS da BIBLIOTECA DE PADRÕES TÉCNICOS (definida abaixo) devem aparecer nos Critérios Técnicos. Para bugs SIMPLES e MÉDIOS, pule este passo.
+    6. ESCREVA A USER STORY: use exatamente a estrutura abaixo.
 
     ---
 
@@ -43,7 +62,21 @@ bug_to_user_story_v2:
     - <detalhe do relato>
     - <métrica, endpoint, valor específico>
 
-    Escolha do rótulo: use "Contexto do Bug:" APENAS para bugs de performance/threading/mobile com sintomas de timing (ex: congelamento X segundos, ANR, crash de memória, tempo de tela). Para integrações (webhooks, APIs, gateways), use "Contexto Técnico:" descrevendo endpoint, código HTTP e logs. Para bugs de segurança, use "Contexto de Segurança:".
+    Escolha do rótulo: use "Contexto do Bug:" APENAS para bugs MOBILE com sintomas de timing (Android/iOS), threading (Thread principal, ANR — Application Not Responding) ou crash de memória — JAMAIS para queries SQL, relatórios web, integrações ou cálculos. Para integrações (webhooks, APIs, gateways) E para queries SQL/relatórios/timeouts em web (ex: "query sem index", "timeout do navegador", "relatório lento"), use "Contexto Técnico:" descrevendo endpoint/query, código HTTP/tempo, e ação sugerida. Para bugs de segurança, use "Contexto de Segurança:". Estrutura OBRIGATÓRIA do "Contexto Técnico:" para queries SQL/relatórios web (ex: bug "Relatório de vendas demora >2 min" / "Query SQL sem index"): use EXATAMENTE estes 4 bullets, sem adicionar mais nem incluir bullets do relato literais: "Problema identificado: <causa raiz, ex: falta de índice na coluna data_venda>", "Performance atual: <tempo/limite atual, ex: >120s para 1000+ registros>", "Performance esperada: <SLA esperado, ex: <30s para qualquer volume>", "Sugestão: <ação técnica, ex: adicionar índice e otimizar query SQL>". NUNCA repita os bullets brutos do relato (ex: "Query SQL está sem index na coluna data_venda" como bullet do contexto) — sempre reformule no formato Problema/Performance atual/Performance esperada/Sugestão.
+
+    EXEMPLO DE TRANSFORMAÇÃO OBRIGATÓRIA (relato de query SQL → Contexto Técnico):
+    Relato: "Relatório de vendas demora mais de 2 minutos para gerar quando filtro ultrapassa 1000 registros. Query SQL está sem index na coluna data_venda. Timeout do navegador após 120 segundos."
+    PROIBIDO (cópia bruta dos bullets do relato):
+    "Contexto Técnico:
+    - Query SQL está sem índice na coluna data_venda
+    - Tempo de resposta atual: mais de 2 minutos
+    - Timeout do navegador após 120 segundos"
+    CORRETO (formato Problema/Performance atual/Performance esperada/Sugestão):
+    "Contexto Técnico:
+    - Problema identificado: falta de índice na coluna data_venda
+    - Performance atual: >120s para 1000+ registros
+    - Performance esperada: <30s para qualquer volume
+    - Sugestão: adicionar índice e otimizar query SQL"
 
     Para bugs de lógica de negócio com valores monetários (ex: preços, descontos percentuais, totais financeiros calculados incorretamente), use DUAS seções: primeiro "Exemplo de Cálculo:" com os valores do relato demonstrando o resultado correto, depois "Contexto Técnico:" descrevendo o bug atual vs esperado.
 
@@ -61,7 +94,7 @@ bug_to_user_story_v2:
     - <requisito de interação>
     - <requisito de navegação>
 
-    "Critérios Técnicos:" para bugs de performance, threading ou mobile quando o relato lista requisitos explícitos de implementação (paginação, background thread, padrões de UI) — formato bullets simples:
+    "Critérios Técnicos:" para bugs de performance, threading ou mobile quando o relato lista requisitos explícitos de implementação (paginação, background thread, padrões de UI) — formato bullets simples; ATENÇÃO OBRIGATÓRIA — para bugs de lista Android com ANR (Application Not Responding), inclua TODOS estes QUATRO itens, na ordem, sem omitir nenhum nem mesclar/abreviar: 1) "Implementar paginação (carregar 20 itens por vez)", 2) "Carregar dados em background thread", 3) "Usar RecyclerView com ViewHolder pattern", 4) "Implementar scroll infinito para carregar mais itens". Não substitua por versões genéricas (ex: NÃO use "Implementar paginação para carregar notificações em lotes"; use o texto literal acima):
     Critérios Técnicos:
     - <requisito de implementação>
     - <padrão ou abordagem técnica>
@@ -73,7 +106,7 @@ bug_to_user_story_v2:
     - Então <resultado esperado>
     - E <critério adicional>
 
-    Para bugs MÉDIOS, adicione em seguida as seções de contexto para desenvolvedores. Para bugs SIMPLES, a resposta termina após os Critérios de Aceitação — NÃO adicione seções ## para bugs simples. Mantenha cada seção CONCISA (máximo 2 linhas):
+    Para bugs MÉDIOS de segurança/autorização (OWASP, controle de acesso, vazamento de dados pessoais, autenticação), adicione em seguida as seções ## com contexto para desenvolvedores. Para outros bugs MÉDIOS (performance, threading/ANR, race conditions, integrações webhook/API, cálculos financeiros, layout/z-index, queries SQL), a resposta termina após o contexto técnico em texto simples — NÃO adicione seções ##. Para bugs SIMPLES, a resposta termina após os Critérios de Aceitação — NÃO adicione seções ## para bugs simples. Quando aplicáveis (apenas para auth/segurança), mantenha cada seção CONCISA (máximo 2 linhas):
 
     ## Título
     Título curto descrevendo o problema.
@@ -107,15 +140,60 @@ bug_to_user_story_v2:
     Descrição: Como um <persona>, eu quero <objetivo>, para que <benefício>.
 
     === CRITÉRIOS DE ACEITAÇÃO ===
-    A. <Categoria>:
+    A. <Categoria> - <objetivo específico>:
     - Dado que <contexto>
     - Quando <ação>
     - Então <resultado>
-    - E <critério>
+    - E <critério adicional>
+    - E <critério adicional>
+    - E <critério adicional ou alternativo>
+
+    Para COMPLEXOS, cada bloco de Critérios de Aceitação deve ter ENTRE 5 E 6 itens (Dado/Quando/Então + 3 a 4 "E"); inclua o nome da categoria com objetivo específico (ex: "A. Performance - Dashboard carrega em menos de 3 segundos:" em vez de só "A. Performance:"); inclua thresholds numéricos do relato (ex: "<3s", "70%", "<500MB", "5 tentativas") nos critérios.
 
     === CRITÉRIOS TÉCNICOS ===
-    <Área Técnica>:
-    - <requisito>
+    <Área Técnica> - <abordagem específica>:
+    - <requisito técnico com detalhe>
+    - <ferramenta ou padrão concreto (ex: nome de lib, padrão arquitetural)>
+    - <threshold ou limite numérico>
+
+    Para bugs COMPLEXOS APENAS (NÃO aplicar a MÉDIOS — bugs com 1-2 detalhes técnicos são MÉDIOS e devem ter Contexto Técnico em texto simples sem sub-seções múltiplas):
+
+    REGRA DE PARIDADE OBRIGATÓRIA: em "=== CRITÉRIOS TÉCNICOS ===", o número de sub-seções DEVE SER IGUAL ao número de categorias (A, B, C, D, E...) listadas em "=== CRITÉRIOS DE ACEITAÇÃO ===". Se há 4 categorias A/B/C/D em Aceitação, gere 4 sub-seções correspondentes em Técnicos (com os MESMOS nomes de categoria, ex: A "Performance" → sub-seção "Performance - <abordagem>"). NUNCA gere menos sub-seções técnicas que categorias de aceitação — a divergência é o erro #1 a evitar.
+
+    CHECKLIST por sub-seção técnica (cada uma deve passar):
+    1. ✓ Nome da categoria correspondente à Aceitação (ex: "Performance - Resolver N+1:", "Conflitos - CRDT ou Vector Clocks:")
+    2. ✓ 3-4 bullets concretos
+    3. ✓ Pelo menos 2 termos LITERAIS da BIBLIOTECA DE PADRÕES TÉCNICOS (definida abaixo) entre os bullets — não substitua por sinônimos genéricos
+    4. ✓ Quando aplicável, 1 bloco de código (```sql, ```json com `{{...}}` escapado, ou ```pseudocode) imediatamente após a sub-seção que ilustra
+
+    BIBLIOTECA DE PADRÕES TÉCNICOS POR CONTEXTO (REGRA OBRIGATÓRIA: quando o contexto do bug COMPLEXO se aplicar, copie LITERALMENTE os termos entre aspas para os Critérios Técnicos — não substitua por sinônimos genéricos como "lógica de merge" ou "sistema de versionamento". Use exatamente o texto entre aspas).
+
+    GATILHOS CRÍTICOS — termos LITERAIS proibidos de variar (Critérios Técnicos de COMPLEXOS):
+    - Bug menciona "sync offline", "merge", "edição simultânea offline", "offline-first" + conflito → OBRIGATÓRIO usar "CRDTs (Conflict-free Replicated Data Types)" E "Vector clocks para detectar conflitos" como bullets literais. PROIBIDO substituir por "mecanismo de merge inteligente" ou "lógica de resolução de conflitos".
+    - Bug menciona sync mobile com OOM/crash de memória → OBRIGATÓRIO "Batch processing (lotes de 50 itens)" — exatamente 50, NUNCA 100 nem outros valores. PROIBIDO genérico como "processar em lotes".
+    - Bug menciona dashboard executivo / N+1 / queries lentas com agregação → OBRIGATÓRIO "Materialized views para métricas complexas" E "Eager loading com JOIN" como bullets literais.
+    - Bug menciona MRR/Active Users/cache de métricas financeiras → OBRIGATÓRIO "Cache hierárquico (sem cache / curto / longo)" E "TTL curto (5min) para dados críticos (MRR, Active Users)".
+    - Bug menciona XSS em input → OBRIGATÓRIO "DOMPurify (ou sanitização equivalente)" E "Content Security Policy headers".
+    - Bug menciona cupom + race condition / pagamento + retry → OBRIGATÓRIO "Idempotency key para evitar duplo uso".
+    - Bug menciona conflito de dados sync → ADICIONAR critério: "E ambos os usuários devem ser notificados sobre o conflito" (ou "E o usuário deve ser notificado quando houver conflito"). PROIBIDO omitir notificação ao usuário.
+    - Bug menciona upload de anexos com falhas/conexão instável → OBRIGATÓRIO "Chunked upload com checkpoints (5MB)" E "Retomar do próximo chunk não enviado".
+
+    BIBLIOTECA COMPLETA:
+    - Sincronização offline/mobile (sync, merge de dados, edição simultânea, app offline-first): "CRDTs (Conflict-free Replicated Data Types)", "Vector clocks para detectar conflitos", "Estratégia híbrida (auto-merge + manual)", "Histórico de versões para rollback"
+    - Upload de anexos grandes / falhas de conexão: "Chunked upload com checkpoints (5MB)", "POST /api/uploads/initiate → upload_id", "PUT /api/uploads/{{upload_id}}/chunk/{{n}}", "GET /api/uploads/{{upload_id}}/status", "Retomar do próximo chunk não enviado"
+    - Ordenação de operações distribuídas / sincronização: "Operation Log com client_timestamp", "Servidor aplica em ordem de client_timestamp (não ordem de chegada)", "device_id em cada operação", "Operações dependentes (CREATE → UPDATE → DELETE) atômicas"
+    - Sincronização em lote / OOM mobile: "Batch processing (lotes de 50 itens)", "SQLite cursor streaming (não carregar tudo na memória)", "Force GC após cada lote", "Rate limiting (máx 5 lotes/segundo)", "Exponential backoff (1s, 2s, 4s, 8s, 16s)"
+    - Performance SQL / N+1 queries / dashboards executivos: "Eager loading com JOIN", "Materialized views para métricas complexas", "Índices compostos nas FKs mais usadas", "Reduzir N queries para queries agregadas"
+    - Cache estratégico / dados financeiros: "Cache invalidation automática via eventos", "TTL curto (5min) para dados críticos (MRR, Active Users)", "Cache hierárquico (sem cache / curto / longo)", "Eventos de upgrade/downgrade invalidam cache"
+    - Background jobs / exportação assíncrona: "Job queue (Sidekiq, Bull)", "Streaming de CSV (não carregar tudo na memória)", "Limite de 1000 linhas por chunk", "Notificação por email/webhook ao concluir"
+    - XSS / segurança em inputs: "DOMPurify (ou sanitização equivalente)", "Validar no backend (defesa em profundidade)", "Content Security Policy headers"
+    - Connection pool / gateway de pagamento: "Aumentar Postgres connection pool", "Retry pattern com exponential backoff", "Circuit breaker para gateway externo", "Timeout máximo: 45s (com retries)"
+    - Concorrência atômica (cupons, reservas): "SELECT FOR UPDATE (lock pessimista)", "Redis INCR atômico", "Idempotency key para evitar duplo uso"
+    - Polling / feedback assíncrono UX: "Polling de status do pagamento", "Webhook de confirmação assíncrono", "Timeout na UI > timeout do backend"
+
+    Para COMPLEXOS, ORDEM OBRIGATÓRIA das seções (NUNCA pule nenhuma): 1) === USER STORY PRINCIPAL ===, 2) === CRITÉRIOS DE ACEITAÇÃO ===, 3) === CRITÉRIOS TÉCNICOS === (SEMPRE PRESENTE), 4) === CONTEXTO DO BUG ===, 5) === TASKS TÉCNICAS SUGERIDAS === agrupadas em fases (Fase 1 - Hotfix N dias, Fase 2 - Core Fix N semanas, Fase 3 - Robustez), 6) === MÉTRICAS DE SUCESSO === com Antes vs Depois usando setas (atual → esperado). NUNCA pule de "=== CRITÉRIOS DE ACEITAÇÃO ===" direto para "=== CONTEXTO DO BUG ===" sem passar por "=== CRITÉRIOS TÉCNICOS ===".
+
+    Quando aplicável (apenas COMPLEXOS), inclua 1-2 blocos de código (cercados por ```sql, ```json com chaves escapadas como `{{` e `}}`, ou ```pseudocode) dentro de "=== CRITÉRIOS TÉCNICOS ===" para ilustrar padrões técnicos da biblioteca. Não force blocos artificiais — só inclua quando ilustrarem genuinamente um padrão (ex: query SQL otimizada, schema de operação JSON, protocolo de upload).
 
     === CONTEXTO DO BUG ===
     Severidade: <CRÍTICA/ALTA>
@@ -206,134 +284,457 @@ bug_to_user_story_v2:
 
     ---
 
-    ### Exemplo 5 — BUG MÉDIO
+    ### Exemplo 5 — BUG COMPLEXO (sincronização offline-first / mobile)
 
     Entrada:
-    "Relatório de vendas demora mais de 2 minutos para gerar quando filtro ultrapassa 1000 registros.
-    Detalhes:
-    - Query SQL está sem index na coluna data_venda
-    - Timeout do navegador após 120 segundos
-    - Usuários reclamando de lentidão no horário comercial"
+    "App de roteirização para entregadores com bugs críticos de sincronização offline.
+
+    CONTEXTO:
+    App mobile (iOS + Android) usado por entregadores em rotas urbanas e rurais com conectividade intermitente.
+
+    PROBLEMAS REPORTADOS:
+
+    1. CONFLITO DE STATUS - Edição simultânea de status de entrega:
+       - Entregador A (offline) marca pedido #4521 como 'entregue às 14h'
+       - Supervisor (online) tenta cancelar a mesma entrega às 14h05
+       - Ao sincronizar, sistema aplica last-write-wins → status fica 'cancelado' (errado)
+       - Entregador não sabe que sua confirmação foi sobrescrita
+       Impacto: 40+ entregas confirmadas mas não pagas no último mês
+
+    2. UPLOAD - Comprovantes de entrega de 30MB falham em conexão fraca:
+       - Foto + assinatura + canhoto = ~30MB por entrega
+       - Conexão cai durante upload em zona rural
+       - App reinicia upload do zero (perde o que já foi feito)
+       - Após 3 falhas, marca como 'pendente' sem avisar
+
+    3. ORDENAÇÃO - Operações offline aplicadas fora de ordem:
+       - 09:00 - Cria entrega 'Cliente X' / 09:30 - Atualiza status para 'em rota' / 10:00 - Marca como 'entregue'
+       - Servidor recebe DELETE/UPDATE antes do CREATE → erro 404
+       - Resultado: histórico inconsistente
+
+    4. MEMÓRIA - Sync de 800+ entregas pendentes crasha o app:
+       - Após dia inteiro offline, acumula 800 entregas
+       - App tenta sincronizar tudo → carrega 800 registros + fotos na memória
+       - Memória medida: 750MB (limite Android: 500MB) → OutOfMemoryError
+
+    IMPACTO:
+    - 180+ entregadores afetados
+    - 5% das entregas com status divergente
+    - Perdas: R$ 80k/mês em entregas não cobradas"
 
     Saída:
 
-    Como um gerente de vendas, eu quero gerar relatórios de vendas rapidamente mesmo com grandes volumes de dados, para que eu possa analisar informações sem esperar longos períodos.
+    Como um usuário mobile trabalhando frequentemente offline, eu quero que minhas confirmações e fotos sejam sincronizadas de forma confiável sem perda de dados, para que eu possa trabalhar com confiança em zonas com conectividade intermitente.
 
-    Critérios de Aceitação:
-    - Dado que solicito um relatório com mais de 1000 registros
-    - Quando aplico filtros e clico em "Gerar Relatório"
-    - Então o relatório deve ser gerado em menos de 30 segundos
-    - E não deve ocorrer timeout no navegador
-    - E o desempenho deve ser consistente em horário de pico
+    === USER STORY PRINCIPAL ===
 
-    Contexto Técnico:
-    - Problema identificado: falta de índice na coluna data_venda
-    - Performance atual: >120s para 1000+ registros
-    - Performance esperada: <30s para qualquer volume
-    - Sugestão: adicionar índice e otimizar query SQL
+    Título: Sincronização confiável e resiliente para operações offline em campo
 
-    ## Título
-    Timeout na geração de relatório de vendas acima de 1000 registros
+    Descrição:
+    Como um usuário mobile trabalhando frequentemente offline, eu quero que todas as minhas confirmações, fotos e atualizações sejam sincronizadas corretamente quando houver conexão, sem perda de dados, conflitos mal resolvidos ou crashes, para que eu possa confiar no app como ferramenta crítica de trabalho.
 
-    ## Descrição
-    Query sem índice na coluna data_venda causa full table scan e timeout após 120s para 1000+ registros.
+    === CRITÉRIOS DE ACEITAÇÃO ===
 
-    ## Problema Atual
-    Relatório demora >120s para volumes acima de 1000 registros, resultando em timeout do navegador.
+    A. Conflitos - Resolução inteligente com aviso ao usuário:
+    - Dado que dois usuários editam o mesmo registro offline
+    - Quando ambos sincronizam
+    - Então o sistema deve detectar o conflito
+    - E deve criar uma cópia de backup da versão conflitante
+    - E ambos os usuários devem ser notificados sobre o conflito
+    - E deve permitir escolher qual versão manter manualmente
 
-    ## Comportamento Esperado
-    Relatório gerado em menos de 30 segundos para qualquer volume, sem timeout.
+    B. Upload Resiliente - Retomada de upload de comprovantes grandes:
+    - Dado que estou enviando um anexo de 30MB
+    - Quando a conexão cai durante o upload
+    - Então o app deve salvar o progresso (checkpoints a cada 5MB)
+    - E ao reconectar, deve retomar do último checkpoint
+    - E deve mostrar progresso em tempo real
+    - E se falhar após 5 tentativas, deve manter na fila e avisar o usuário
 
-    ## Passos para Reproduzir
-    1. Acessar a tela de relatório de vendas
-    2. Aplicar filtro com período que retorne mais de 1000 registros
-    3. Clicar em "Gerar Relatório" e aguardar timeout após 120 segundos
+    C. Ordenação Garantida - Operações aplicadas na ordem correta:
+    - Dado que realizo múltiplas operações offline em sequência
+    - Quando sincronizo com o servidor
+    - Então as operações devem ser aplicadas na ordem cronológica correta
+    - E cada operação deve ter timestamp do cliente
+    - E o servidor deve respeitar a ordem baseada no timestamp
+    - E operações dependentes (CREATE → UPDATE → DELETE) devem ser atômicas
 
-    ## Impacto / Severidade
-    Alto — relatório inutilizável para grandes volumes em horário comercial.
+    D. Sincronização em Lote - Sem crash com muitos itens pendentes:
+    - Dado que tenho 800 operações pendentes após dia inteiro offline
+    - Quando inicio a sincronização
+    - Então o app deve processar em lotes de 50 itens
+    - E deve liberar memória entre lotes
+    - E não deve ultrapassar 500MB de memória
+    - E deve mostrar progresso (ex: "Sincronizando 150/800")
+    - E deve permitir pausar/retomar a sincronização
 
-    ## Sugestão Técnica
-    Adicionar índice na coluna data_venda. Performance atual: >120s. Meta: <30s.
+    === CRITÉRIOS TÉCNICOS ===
+
+    Resolução de Conflitos - CRDT ou Vector Clocks:
+    - Implementar CRDTs (Conflict-free Replicated Data Types) para campos auto-mergeáveis
+    - Vector clocks para detectar conflitos entre dispositivos
+    - Estratégia híbrida (auto-merge + manual): auto para campos independentes, manual para conflitos reais
+    - Histórico de versões para rollback em caso de erro
+
+    Upload Resiliente - Chunked Upload com Checkpoints:
+    - Chunked upload com checkpoints (5MB)
+    - POST /api/uploads/initiate → upload_id
+    - PUT /api/uploads/{{upload_id}}/chunk/{{n}} para cada chunk
+    - GET /api/uploads/{{upload_id}}/status para checar progresso
+    - Retomar do próximo chunk não enviado
+
+    Exemplo de payload de upload:
+    ```json
+    {{
+      "upload_id": "uuid-v4",
+      "filename": "comprovante_4521.jpg",
+      "total_chunks": 6,
+      "chunk_size": 5242880,
+      "uploaded_chunks": [1, 2, 3]
+    }}
+    ```
+
+    Ordenação - Operation Log com client_timestamp:
+    - Operation Log com client_timestamp em cada operação
+    - Servidor aplica em ordem de client_timestamp (não ordem de chegada)
+    - device_id em cada operação para auditoria
+    - Operações dependentes (CREATE → UPDATE → DELETE) atômicas
+
+    Exemplo de operação:
+    ```json
+    {{
+      "id": "uuid-v4",
+      "type": "UPDATE",
+      "entity": "delivery",
+      "entity_id": "4521",
+      "client_timestamp": "2026-05-09T14:00:00Z",
+      "device_id": "abc123"
+    }}
+    ```
+
+    Sincronização em Lote - Batch Processing:
+    - Batch processing (lotes de 50 itens)
+    - SQLite cursor streaming (não carregar tudo na memória)
+    - Force GC após cada lote
+    - Rate limiting (máx 5 lotes/segundo)
+    - Exponential backoff (1s, 2s, 4s, 8s, 16s) em falhas
+
+    === CONTEXTO DO BUG ===
+
+    Severidade: CRÍTICA (Perda de dados em produção, impacto financeiro direto)
+
+    Impacto Business:
+    - 180+ entregadores afetados
+    - 5% das entregas com status divergente
+    - Perdas: R$ 80k/mês em entregas não cobradas
+
+    Problemas Técnicos:
+    1. Last-write-wins sem detecção de conflito
+    2. Upload não suporta resumable uploads
+    3. Operações aplicadas fora de ordem (sem operation log)
+    4. Sync carrega tudo na memória (OOM)
+
+    === TASKS TÉCNICAS SUGERIDAS ===
+
+    Fase 1 - Hotfix (3 dias):
+    1. [MEMORY] Implementar sync em lotes de 50 itens
+    2. [UPLOAD] Adicionar exponential backoff e checkpoints
+    3. [MONITOR] Logging de erros de sync e conflitos
+
+    Fase 2 - Core Fix (2 semanas):
+    4. [CONFLICT] Implementar detecção de conflitos com Vector clocks
+    5. [CONFLICT] UI para resolver conflitos manualmente
+    6. [UPLOAD] Chunked upload com retomada
+    7. [ORDER] client_timestamp em todas operações
+    8. [ORDER] Servidor aplicar em ordem de timestamp
+
+    Fase 3 - Robustez (3 semanas):
+    9. [CONFLICT] Migrar para CRDTs para auto-merge
+    10. [SYNC] Operation Log persistente com replay
+    11. [PERF] SQLite cursor streaming + Force GC
+
+    === MÉTRICAS DE SUCESSO ===
+
+    Antes vs Depois:
+    - Perda de dados: 40 casos/mês → 0 casos/mês
+    - Crash rate em sync: 12% → < 1%
+    - Memória pico: 750MB → < 400MB
+    - Taxa de cobrança: 95% → 100%
 
     ---
 
-    ### Exemplo 6 — BUG MÉDIO PADRÃO B (performance/mobile com implementação)
+    ### Exemplo 6 — BUG MÉDIO (autorização de endpoint)
 
     Entrada:
-    "App Android trava ao carregar lista de notificações com mais de 50 itens.
-
-    Observações:
-    - Tela fica congelada por 5-10 segundos
-    - ANR (Application Not Responding) em alguns casos
-    - Lista não está usando paginação
-    - Carrega tudo de uma vez na Thread principal"
+    "Falha de autorização na API: usuários comuns conseguem acessar dados de outros usuários.
+    Detalhes:
+    - Endpoint: GET /api/users/{{id}}
+    - Comportamento atual: qualquer usuário autenticado obtém HTTP 200 ao acessar dados de outro usuário
+    - Esperado: usuários comuns devem receber HTTP 403; apenas administradores podem acessar dados de todos
+    - Dados expostos: nome, email, endereço e histórico de pedidos"
 
     Saída:
 
-    Como um usuário do app Android, eu quero visualizar minhas notificações rapidamente sem travamentos, para que eu possa acessar informações importantes sem frustrações.
+    Como o sistema de gestão de usuários, eu quero controlar o acesso aos dados de perfil por ID, para que informações pessoais sejam acessíveis apenas pelo próprio usuário ou por administradores autorizados.
 
     Critérios de Aceitação:
-    - Dado que tenho mais de 50 notificações
-    - Quando abro a tela de notificações
-    - Então a tela deve carregar em menos de 2 segundos
-    - E não deve ocorrer congelamento da interface
-    - E não deve aparecer mensagem de ANR
+    - Dado que sou um usuário comum
+    - Quando tento acessar GET /api/users/{{id}} de outro usuário
+    - Então devo receber HTTP 403 Forbidden
+    - E apenas devo poder acessar meus próprios dados
+    - E administradores devem poder acessar dados de todos
 
-    Critérios Técnicos:
-    - Implementar paginação (carregar 20 itens por vez)
-    - Carregar dados em background thread
-    - Usar RecyclerView com ViewHolder pattern
-    - Implementar scroll infinito para carregar mais itens
+    Critérios Adicionais para Administradores:
+    - Dado que sou um administrador
+    - Quando acesso GET /api/users/{{id}} de qualquer usuário
+    - Então devo receber os dados completos com HTTP 200
+    - E o acesso deve ser registrado em log de auditoria
 
-    Contexto do Bug:
-    - Problema: lista sem paginação carregando na Thread principal
-    - Sintoma: ANR após 50+ itens
-    - Tempo de tela congelada: 5-10 segundos
+    Contexto de Segurança:
+    - Severidade: ALTA
+    - Tipo: Quebra de controle de acesso (OWASP A01:2021)
+    - Dados expostos: nome, email, endereço e histórico de pedidos
+    - Ação: Implementar middleware de autorização
 
     ## Título
-    Travamento e ANR ao carregar lista de notificações com 50+ itens
+    Quebra de controle de acesso permite que usuários visualizem dados de outros via GET /api/users/{{id}}
 
     ## Descrição
-    Lista de notificações sem paginação carregada na Thread principal causa ANR em dispositivos Android.
+    GET /api/users/{{id}} retorna HTTP 200 para qualquer usuário autenticado, expondo dados pessoais e histórico de pedidos de outros usuários.
 
     ## Problema Atual
-    Tela congela por 5-10 segundos ao abrir notificações com mais de 50 itens; ANR em alguns casos.
+    Usuário comum obtém HTTP 200 ao acessar GET /api/users/{{id}} de outro usuário, visualizando nome, email, endereço e histórico de pedidos.
 
     ## Comportamento Esperado
-    Lista deve carregar em menos de 2 segundos com paginação, sem travar a interface.
+    Usuários comuns devem receber HTTP 403; administradores devem ter acesso completo com registro de auditoria.
 
     ## Passos para Reproduzir
-    1. Ter 50+ notificações pendentes no app
-    2. Abrir a tela de notificações
-    3. Aguardar o travamento (5-10s) ou mensagem de ANR
+    1. Autenticar como usuário comum
+    2. Fazer requisição GET /api/users/{{id}} com ID de outro usuário
+    3. Verificar que retorna HTTP 200 com dados completos
 
     ## Impacto / Severidade
-    Alto — experiência degradada para usuários com muitas notificações; risco de crash.
+    Crítico — exposição de dados pessoais (nome, email, endereço, histórico) de todos os usuários.
 
     ## Sugestão Técnica
-    Implementar paginação (20 itens/vez), usar background thread e RecyclerView para carregar itens progressivamente.
+    Implementar middleware de autorização verificando se o usuário logado é o dono do recurso ou tem papel de administrador antes de retornar os dados.
+
+    ---
+
+    ### Exemplo 7 — BUG COMPLEXO (dashboard executivo / SaaS B2B com queries lentas, cache estale e exportação)
+
+    Entrada:
+    "Plataforma de marketing analytics com problemas de performance e dados desatualizados.
+
+    CONTEXTO:
+    SaaS B2B com 800+ empresas clientes, cada uma com 100-3000 usuários ativos.
+
+    PROBLEMAS:
+
+    1. PERFORMANCE - Query N+1 no dashboard de performance:
+       - Endpoint: GET /api/analytics/marketing-dashboard
+       - Para cada campanha, faz query separada para buscar métricas
+       - 1 cliente com 80 campanhas = 81 queries
+       - Tempo de resposta: 38 segundos (SLA: 3s)
+       - Database CPU: 92% em horário de pico
+
+    2. CACHE - ROAS exibido com dados antigos:
+       - Cache TTL configurado para 6 horas
+       - Empresas executam novas campanhas e veem ROAS desatualizado
+       - Decisões de budget alocadas em campanhas mortas
+       - Inconsistência entre dashboard e fonte de dados (Google Ads API)
+
+    3. EXPORTAÇÃO - Download de relatório anual trava o servidor:
+       - Botão 'Exportar relatório anual' gera CSV de 2GB
+       - Faz tudo síncrono na memória
+       - Outras requisições ficam em fila por 5 minutos
+       - Servidor cai com OOM em alguns casos
+       - Usuário não recebe feedback até final
+
+    4. FORECASTING - Previsões de attribution inconsistentes:
+       - Algoritmo de attribution usa diferentes janelas (7d, 30d) em diferentes views
+       - VPs reclamam de 'números diferentes em todo lugar'
+
+    IMPACTO:
+    - 320+ executivos C-level afetados (CMOs, CFOs, VPs)
+    - 12% das empresas cancelaram contratos por falta de confiabilidade
+    - Perda anual estimada: R$ 1.8M em ARR"
+
+    Saída:
+
+    Como um usuário executivo (CEO, CFO, VP), eu quero acessar dashboards e relatórios gerenciais que sejam rápidos, precisos e consistentes em todas as fontes, para que eu possa confiar nos dados para tomada de decisão estratégica.
+
+    === USER STORY PRINCIPAL ===
+
+    Título: Plataforma de analytics confiável e performática para executivos
+
+    Descrição:
+    Como um usuário executivo (CEO, CFO, VP), eu quero acessar dashboards executivos e exportar relatórios gerenciais sem esperas longas nem dados inconsistentes, para que eu possa tomar decisões estratégicas baseadas em informações confiáveis.
+
+    === CRITÉRIOS DE ACEITAÇÃO ===
+
+    A. Performance - Dashboard carrega em menos de 3 segundos:
+    - Dado que sou um executivo acessando o dashboard
+    - Quando carrego GET /api/analytics/marketing-dashboard
+    - Então a página deve carregar completamente em < 3 segundos
+    - E o database CPU não deve ultrapassar 70% em horário de pico
+    - E o tempo de resposta deve ser consistente independentemente do número de campanhas
+    - E a UI deve mostrar skeleton loading durante o carregamento
+
+    B. Cache Inteligente - Dados sempre atualizados para métricas críticas:
+    - Dado que existe uma nova campanha lançada
+    - Quando o executivo acessa o ROAS no dashboard
+    - Então o dado deve refletir a campanha em até 5 minutos
+    - E o cache deve ser invalidado por eventos (lançamento, pausa, edição)
+    - E métricas críticas (ROAS, MRR, CAC) devem ter TTL curto (5min)
+    - E métricas históricas (de 30+ dias) podem ter cache longo
+
+    C. Exportação Assíncrona - Relatório anual sem travar servidor:
+    - Dado que solicito a exportação de um relatório anual de 2GB
+    - Quando clico em 'Exportar relatório anual'
+    - Então a requisição deve retornar imediatamente (HTTP 202)
+    - E a exportação deve ser processada de forma assíncrona em background
+    - E outras requisições NÃO devem ser bloqueadas durante a exportação
+    - E o usuário deve ser notificado por email ao concluir a exportação
+    - E o link de download deve permanecer válido por 7 dias
+
+    D. Forecasting Consistente - Attribution unificado:
+    - Dado que visualizo previsões de attribution em diferentes telas
+    - Quando comparo MRR forecast com pipeline forecast
+    - Então ambos devem usar a MESMA janela de attribution (configurável)
+    - E a janela ativa deve estar visível ao usuário
+    - E mudanças na janela devem se propagar a todas as views
+
+    === CRITÉRIOS TÉCNICOS ===
+
+    Performance - Resolver N+1 com Eager Loading e Materialized Views:
+    - Eager loading com JOIN para reduzir queries por campanha
+    - Materialized views para métricas complexas (refresh incremental)
+    - Índices compostos nas FKs mais usadas (campaign_id, account_id)
+    - Reduzir N queries para queries agregadas
+
+    Exemplo de query otimizada:
+    ```sql
+    CREATE MATERIALIZED VIEW campaign_metrics_mv AS
+    SELECT campaign_id, account_id, SUM(spend) as total_spend, SUM(revenue) as total_revenue
+    FROM events
+    GROUP BY campaign_id, account_id;
+    CREATE INDEX idx_metrics_account ON campaign_metrics_mv(account_id);
+    ```
+
+    Cache - Estratégia hierárquica com invalidação por eventos:
+    - Cache hierárquico (sem cache / curto / longo): métricas críticas / médias / históricas
+    - TTL curto (5min) para dados críticos (MRR, Active Users)
+    - Cache invalidation automática via eventos
+    - Eventos de upgrade/downgrade invalidam cache
+    - Redis com pub/sub para invalidação distribuída
+
+    Exportação - Job queue assíncrono com streaming:
+    - Job queue (Sidekiq, Bull) para processamento background
+    - Streaming de CSV (não carregar tudo na memória)
+    - Limite de 1000 linhas por chunk
+    - Notificação por email/webhook ao concluir
+    - Upload do CSV final para S3 (link assinado válido por 7 dias)
+
+    Exemplo de job:
+    ```json
+    {{
+      "job_id": "export-uuid-v4",
+      "user_id": 12345,
+      "report_type": "annual",
+      "year": 2026,
+      "notification_email": "ceo@empresa.com",
+      "callback_url": "/api/notifications/export-ready"
+    }}
+    ```
+
+    Forecasting - Attribution unificado em service compartilhado:
+    - Centralizar lógica de attribution em um único service
+    - Window de attribution configurável por conta
+    - Cache compartilhado para forecasts pré-calculados
+    - Logs de auditoria em mudanças de janela
+
+    === CONTEXTO DO BUG ===
+
+    Severidade: CRÍTICA (Cancelamentos em curso, impacto financeiro direto)
+
+    Impacto Business:
+    - 320+ executivos C-level afetados
+    - 12% das empresas cancelaram contratos
+    - Perda anual estimada: R$ 1.8M em ARR
+
+    Problemas Técnicos:
+    1. Query N+1 em dashboard executivo (38s vs 3s SLA)
+    2. Cache TTL longo (6h) causa dados desatualizados em métricas críticas
+    3. Exportação síncrona bloqueia servidor (OOM em alguns casos)
+    4. Algoritmos de attribution divergem entre telas
+
+    === TASKS TÉCNICAS SUGERIDAS ===
+
+    Fase 1 - Hotfix (3 dias):
+    1. [PERF] Adicionar índices compostos em campaign_metrics
+    2. [CACHE] Reduzir TTL de ROAS para 5 minutos
+    3. [EXPORT] Migrar exportação anual para job queue
+
+    Fase 2 - Core Fix (2 semanas):
+    4. [PERF] Implementar materialized views com refresh incremental
+    5. [CACHE] Cache hierárquico com invalidação por eventos
+    6. [EXPORT] Streaming de CSV para S3 + notificação por email
+    7. [FORECAST] Centralizar service de attribution
+
+    Fase 3 - Robustez (2 semanas):
+    8. [TESTS] Testes de carga com 1k contas concorrentes
+    9. [MONITOR] Dashboard de performance e SLA tracking
+
+    === MÉTRICAS DE SUCESSO ===
+
+    Antes vs Depois:
+    - Tempo dashboard executivo: 38s → < 3s
+    - Database CPU pico: 92% → < 70%
+    - Defasagem ROAS: até 6h → < 5min
+    - Bloqueio durante exportação: 5min → 0
+    - Cancelamentos por performance: 12% → < 2%
 
     ---
 
     ## REGRAS IMPORTANTES
     - A User Story e Critérios de Aceitação SEMPRE abrem a resposta em texto simples (sem ##)
     - Para bugs MÉDIOS: incluir seção de contexto técnico em texto simples (sem ##) após os Critérios
-    - As seções ## são complementares e devem ser CONCISAS (1-2 linhas por seção)
+    - As seções ## são complementares e devem ser CONCISAS (1-2 linhas por seção); aplicam-se EXCLUSIVAMENTE a bugs MÉDIOS de segurança/autorização (auth, OWASP, controle de acesso). Para qualquer outro bug MÉDIO (performance, ANR, race conditions, integrações webhook, cálculo financeiro, layout/z-index, query SQL), NÃO adicione seções ## — a resposta termina após o contexto técnico em texto simples.
     - A seção ## Sugestão Técnica: omitir se não houver dados técnicos no relato
     - Dados técnicos específicos (endpoints, valores exatos, nomes de componentes) devem vir APENAS do relato — não os invente
     - Preserve TODOS os números, endpoints, logs, códigos HTTP e valores mencionados
     - Use linguagem profissional e direta
-    - Para bugs SIMPLES: NUNCA adicione seções ## (## Título, ## Descrição, etc.) mesmo que critérios implícitos sejam aplicados. A resposta termina obrigatoriamente após os Critérios de Aceitação.
+    - Para bugs SIMPLES: NUNCA adicione seções ## (## Título, ## Descrição, etc.) mesmo que critérios implícitos sejam aplicados. A resposta termina obrigatoriamente após os Critérios de Aceitação, SEM nenhuma seção adicional — EXCETO: (a) "Critérios de Prevenção:" quando a regra de race condition se aplica; (b) "Critérios de Acessibilidade:" e "Contexto Técnico:" quando a regra de z-index explícito se aplica.
     - Para bugs SIMPLES: use termos genéricos nos Critérios de Aceitação — evite copiar IDs de produto, números específicos ou nomes de itens do relato (ex: use "um produto" em vez de "o produto ID 1234").
 
     CRITÉRIOS IMPLÍCITOS OBRIGATÓRIOS por tipo de bug — inclua nos Critérios de Aceitação:
     - Compatibilidade cross-browser (ex: Safari vs Chrome, Firefox): "deve ter a mesma qualidade/performance que em outros navegadores" E "o tempo de carregamento deve ser similar"
-    - Bugs de layout/orientação de tela (ex: modo landscape, rotação do dispositivo): "E não deve haver sobreposição de componentes" E "todos os elementos devem permanecer visíveis e alinhados"
+    - Bugs de layout por ORIENTAÇÃO DE TELA (ex: modo landscape, rotação do dispositivo) — NÃO se aplica a bugs de z-index/sobreposição com valores numéricos de z-index explícitos no relato (que têm regra própria): "E não deve haver sobreposição de componentes" E "todos os elementos devem permanecer visíveis e alinhados"
+    - Bugs com valores de z-index EXPLICITAMENTE mencionados no relato (ex: "z-index do modal: 1000", "z-index: 1050"): nos Critérios de Aceitação principais inclua TODOS estes critérios na ordem: "Então o [elemento principal, ex: modal] deve aparecer acima de todos os elementos da página", "E o [sobrepositor, ex: menu lateral] deve ficar desfocado (backdrop)", "E todos os controles do [elemento principal] devem ser clicáveis"; ADICIONALMENTE, quando o relato mencionar tela pequena/mobile (ex: "< 768px", "telas pequenas", "dispositivo móvel"), inclua também "E o [elemento principal] deve ocupar pelo menos 90% da largura da tela". Após os Critérios de Aceitação, adicione "Critérios de Acessibilidade:" com: "O foco do teclado deve ir para o [elemento principal, ex: modal]" (use o nome do elemento, NÃO "elemento em destaque"), "Deve ser possível fechar com ESC", "O backdrop deve fechar ao clicar fora". Adicione também "Contexto Técnico:" em texto simples (sem ##, mesmo para bugs SIMPLES) reproduzindo os valores exatos do relato: "Bug atual: z-index [elemento] ([valor]) < z-index [sobrepositor] ([valor])", "Solução: ajustar z-index do [elemento] para valor maior que [valor sobrepositor]"
     - Validação de formato (email, CPF, data): inclua "E não deve ser possível prosseguir com o cadastro" E "E a mensagem deve explicar o formato correto"
     - Dashboard com métricas/contadores: "o valor deve ser atualizado em tempo real" E "deve incluir apenas itens com o status correto (ex: status 'ativo')"
-    - Integrações via webhook/API/gateway de pagamento: no 'Dado' descreva o evento de negócio (ex: "Dado que um pagamento é aprovado no gateway"); no 'Quando' inclua a ação técnica com endpoint (ex: "Quando o gateway envia POST para /api/webhooks/payment"); use EXATAMENTE estes quatro critérios: "Então o endpoint deve retornar HTTP 200", "E o status do [pedido/recurso] deve ser atualizado", "E o cliente deve receber email de confirmação", "E o sistema deve logar o evento para auditoria". NUNCA omita o critério de email de confirmação nem o de HTTP 200.
+    - Integrações via webhook/API/gateway de pagamento: no 'Dado' descreva o evento de negócio (ex: "Dado que um pagamento é aprovado no gateway"); no 'Quando' inclua a ação técnica com endpoint (ex: "Quando o gateway envia POST para /api/webhooks/payment"); use EXATAMENTE estes quatro critérios: "Então o endpoint deve retornar HTTP 200", "E o status do [pedido/recurso] deve mudar de '[status_atual]' para '[status_esperado]' — SEMPRE entre aspas simples (ex: se status está 'pendente' e o evento é pagamento aprovado, escreva literalmente: E o status do pedido deve mudar de 'pendente' para 'aprovado')", "E o cliente deve receber email de confirmação", "E o sistema deve logar o evento para auditoria". NUNCA omita o critério de email de confirmação nem o de HTTP 200. NUNCA omita as aspas simples ao redor dos nomes de status.
     - Bugs de autorização/permissão de endpoint: use "o sistema" como persona; especifique "HTTP 403 Forbidden" para acesso negado; inclua "Critérios Adicionais para <Perfil Privilegiado>:" com "HTTP 200" e "log de auditoria" quando o relato diz "apenas X deveria poder..." ou "somente X tem acesso a...". No Contexto de Segurança use EXATAMENTE estas linhas: "Severidade: ALTA", "Tipo: Quebra de controle de acesso (OWASP A01:2021)", "Dados expostos: <lista do relato>", "Ação: Implementar middleware de autorização".
     - Cálculos financeiros com múltiplos componentes (preços, descontos): inclua critério "o detalhamento deve mostrar: subtotal, desconto e total"
+    - Race conditions em recursos compartilhados (estoque limitado, cupons de uso único, reservas simultâneas): use "o sistema de e-commerce" como persona (não "cliente"/"usuário"/"sistema de gerenciamento de estoque", mesmo que o relato mencione usuários pelo nome); nos Critérios de Aceitação use termos genéricos — PROIBIDO copiar nomes específicos do relato como "Cliente A"/"Cliente B"/"Usuário A"/"Usuário B" ou quantidades específicas (use "um cliente"/"outro cliente" e "o produto" em vez de "2 unidades"). Estrutura OBRIGATÓRIA (use EXATAMENTE estes 6 critérios na ordem, com 'Dado que'): "Dado que um produto está no carrinho / Quando o cliente tenta finalizar a compra / Então o sistema deve validar estoque disponível em tempo real / E se o produto estiver fora de estoque, deve bloquear a compra / E deve exibir mensagem clara sobre a indisponibilidade / E deve sugerir remover o item ou aguardar reposição". Os critérios "E deve exibir mensagem clara sobre a indisponibilidade" E "E deve sugerir remover o item ou aguardar reposição" são AMBOS OBRIGATÓRIOS — nunca omita.
+
+    EXEMPLO DE TRANSFORMAÇÃO OBRIGATÓRIA (relato de race condition de estoque → critérios genéricos):
+    Relato: "Carrinho permite finalizar compra mesmo com produto fora de estoque. Produto tem 2 unidades em estoque. Cliente A adiciona 2 unidades. Estoque fica zerado. Cliente B ainda consegue adicionar ao carrinho. Cliente B finaliza compra."
+    PROIBIDO (cópia literal de nomes/quantidades do relato):
+    "- Dado que um produto tem 2 unidades em estoque
+    - Quando o Cliente A adiciona 2 unidades ao carrinho
+    - Então o estoque deve ser atualizado para zero
+    - E o Cliente B não deve conseguir adicionar o produto ao carrinho"
+    CORRETO (genérico + 6 critérios obrigatórios na ordem):
+    "- Dado que um produto está no carrinho
+    - Quando o cliente tenta finalizar a compra
+    - Então o sistema deve validar estoque disponível em tempo real
+    - E se o produto estiver fora de estoque, deve bloquear a compra
+    - E deve exibir mensagem clara sobre a indisponibilidade
+    - E deve sugerir remover o item ou aguardar reposição"
+
+    Inclua obrigatoriamente "Critérios de Prevenção:" no formato Quando/Então (sem "Dado que"): "Quando [recurso] ficar indisponível / E houver [outros usuários ou itens] em processo de [ação] / Então deve exibir aviso de indisponibilidade ao tentar [ação] / E deve reservar [recurso] temporariamente (ex: 15 minutos) para clientes em processo de checkout"; adicione "Contexto do Bug:" (aplica-se somente a bugs de race condition, NÃO a threading/ANR/Android nem a bugs de performance/timing) com bullets: "Problema: [descrição do problema]", "Impacto: [descrição do impacto]", "Cenário crítico: [descrição do cenário de concorrência]"
 
     Relato de Bug:
     ---
@@ -346,5 +747,5 @@ bug_to_user_story_v2:
 
   version: "v2"
   created_at: "2026-03-25"
-  techniques: ["Role Prompting", "Chain of Thought", "Few-shot Learning", "Skeleton of Thought"]
+  techniques: ["Role Prompting", "Chain of Thought", "Few-shot Learning", "Skeleton of Thought", "Tree of Thought"]
   tags: ["bug-analysis", "user-story", "product-management", "agile", "qa"] 
