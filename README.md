@@ -206,7 +206,7 @@ MÉDIA GERAL: 0.9348
 
 ```bash
 # 1. Clone o repositório
-git clone <url-do-repositorio>
+git clone https://github.com/jeancsbnu/mba-ia-pull-evaluation-prompt.git
 cd mba-ia-pull-evaluation-prompt
 
 # 2. Instale as dependências (com Poetry)
