@@ -140,7 +140,7 @@ Acoplado a uma **BIBLIOTECA DE PADRÕES TÉCNICOS** com termos LITERAIS por cont
 | Precision       | 0.93          | **0.96**       | ≥ 0.9 | ✓         | ✅        |
 | **Média Geral** | **0.8898**    | **0.9348**     | ≥ 0.9 | ✗         | ✅        |
 
-> **v1 baseline:** prompt publicado em `leonanluppi/bug_to_user_story_v1` (resultado oficial da avaliação `evaluate.py`). Atinge média 0.8898 — REPROVADO pela meta de TODAS as métricas ≥ 0.9, com F1-Score (0.82) e Correctness (0.87) abaixo do mínimo. V1 representa uma das primeiras iterações do projeto; nas otimizações seguintes, **F1-Score foi a métrica que mais gerou dificuldade para atingir a meta**.
+> **v1 baseline:** V1 representa uma das primeiras iterações do projeto; nas otimizações seguintes, **F1-Score foi a métrica que mais gerou dificuldade para atingir a meta**.
 >
 > **v2 aprovado:** prompt em `jeancsbnu/bug_to_user_story_v2` — média 0.9348, **TODAS** as 5 métricas ≥ 0.9.
 
