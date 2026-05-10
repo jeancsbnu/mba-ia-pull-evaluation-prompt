@@ -210,6 +210,8 @@ git clone https://github.com/jeancsbnu/mba-ia-pull-evaluation-prompt.git
 cd mba-ia-pull-evaluation-prompt
 
 # 2. Instale as dependências (com Poetry)
+# O `poetry install` lê o pyproject.toml/poetry.lock e instala tudo —
+# não é preciso usar o requirements.txt.
 poetry install
 
 # 3. Configure as variáveis de ambiente
@@ -246,7 +248,9 @@ poetry run pytest tests/test_prompts.py -v
 ```
 mba-ia-pull-evaluation-prompt/
 ├── .env.example              # Template das variáveis de ambiente
-├── requirements.txt          # Dependências Python
+├── pyproject.toml            # Dependências do projeto (usado pelo `poetry install`)
+├── poetry.lock               # Lockfile das versões resolvidas
+├── requirements.txt          # Lista de referência (não necessária com Poetry)
 ├── README.md                 # Documentação do processo
 │
 ├── prompts/
