@@ -1,0 +1,641 @@
+================================================================================
+EXEMPLO 1  |  latência: 11.54s  |  tokens: 6751
+================================================================================
+
+[BUG REPORT]
+  App de produtividade offline-first com bugs críticos de sincronização.
+  
+  CONTEXTO:
+  App mobile (iOS + Android) que funciona offline e sincroniza quando tem internet.
+  Usuários: vendedores em campo, muitas vezes sem conexão.
+  
+  PROBLEMAS REPORTADOS:
+  
+  1. CONFLITO DE DADOS - Merge incorreto causa perda de dados:
+  
+     Cenário:
+     - Usuário A (offline) edita tarefa #123: "Ligar para cliente X às 14h"
+     - Usuário B (offline) edita mesma tarefa: "Ligar para cliente X às 15h (reagendado)"
+     - Ambos sincroni
+  (...)
+
+--------------------------------------------------------------------------------
+[OUTPUT DO MODELO]
+  === USER STORY PRINCIPAL ===
+  Título: Problemas críticos de sincronização no app de produtividade
+  Descrição: Como um vendedor em campo, eu quero que o app sincronize corretamente as minhas tarefas, para que eu não perca dados importantes e possa gerenciar meu tempo de forma eficaz.
+  
+  === CRITÉRIOS DE ACEITAÇÃO ===
+  A. Conflito de Dados:
+  - Dado que dois usuários estão editando a mesma tarefa offline
+  - Quando ambos sincronizam suas alterações
+  - Então o sistema deve aplicar um mecanismo de merge que preserve as edições de ambos
+  - E o usuário A deve ser notificado se sua edição foi sobrescrita
+  
+  B. Sincronização de Anexos:
+  - Dado que um usuário anexa um arquivo grande a uma tarefa
+  - Quando a conexão de internet é perdida durante o upload
+  - Então o sistema deve retomar o upload a partir do ponto de
+  (...)
+
+--------------------------------------------------------------------------------
+[REFERÊNCIA]
+  Como um vendedor usando o app em campo, eu quero que minhas alterações offline sejam sincronizadas de forma confiável sem perda de dados, para que eu possa trabalhar com tranquilidade mesmo em áreas sem conexão.
+  
+  === USER STORY PRINCIPAL ===
+  
+  Título: Sincronização confiável e resiliente para operações offline
+  
+  Descrição:
+  Como um usuário mobile trabalhando frequentemente offline, eu quero que todas as minhas alterações sejam sincronizadas corretamente quando houver conexão, sem perda de dados, conflitos mal resolvidos ou crashes, para que eu possa confiar no app como ferramenta crítica de trabalho.
+  
+  === CRITÉRIOS DE ACEITAÇÃO ===
+  
+  A. Conflitos - Resolução inteligente com aviso ao usuário:
+  - Dado que dois usuários editam a mesma tarefa offline
+  - Quando ambos sincronizam
+  - Então o sistema dev
+  (...)
+
+--------------------------------------------------------------------------------
+[AVALIAÇÃO F1]
+  F1=0.00 ✗  |  Precision=0.00  |  Recall=0.00
+  Reasoning: Erro na avaliação: Connection error.
+
+================================================================================
+EXEMPLO 2  |  latência: 12.35s  |  tokens: 5903
+================================================================================
+
+[BUG REPORT]
+  Sistema de checkout com múltiplas falhas críticas.
+  
+  PROBLEMAS IDENTIFICADOS:
+  
+  1. SEGURANÇA - XSS no campo de cupom:
+     - Input: <script>alert('xss')</script>
+     - Sistema executa o script
+     - Não há sanitização de entrada
+  
+  2. INTEGRAÇÃO - Gateway de pagamento retorna erro intermitente:
+     - POST /api/payment/process retorna 504 Gateway Timeout em 30% dos casos
+     - Clientes são cobrados mas pedido não é criado
+     - Logs: "Connection pool exhausted" no Postgres
+  
+  3. LÓGICA DE NEGÓCIO - Race condi
+  (...)
+
+--------------------------------------------------------------------------------
+[OUTPUT DO MODELO]
+  === USER STORY PRINCIPAL ===
+  Título: Múltiplas falhas críticas no sistema de checkout
+  Descrição: Como um sistema de checkout, eu quero corrigir falhas de segurança, integração, lógica de negócio e experiência do usuário, para que os clientes possam realizar pagamentos de forma segura e eficiente.
+  
+  === CRITÉRIOS DE ACEITAÇÃO ===
+  A. Segurança:
+  - Dado que um usuário insere um cupom no campo de entrada
+  - Quando o sistema processa a entrada
+  - Então deve sanitizar a entrada para evitar execução de scripts
+  - E não deve permitir a execução de código malicioso
+  
+  B. Integração:
+  - Dado que um cliente tenta processar um pagamento
+  - Quando o sistema envia um POST para /api/payment/process
+  - Então deve retornar HTTP 200 em todos os casos de sucesso
+  - E não deve ocorrer 504 Gateway Timeout
+  - E o pedido de
+  (...)
+
+--------------------------------------------------------------------------------
+[REFERÊNCIA]
+  Como um cliente finalizando minha compra, eu quero um processo de checkout seguro, confiável e com feedback claro, para que eu possa completar minhas compras sem preocupações ou frustrações.
+  
+  === USER STORY PRINCIPAL ===
+  
+  Título: Checkout seguro e confiável com tratamento robusto de erros
+  
+  Descrição:
+  Como um cliente do e-commerce, eu quero finalizar minhas compras de forma segura e receber feedback claro sobre o status do pagamento, para que eu tenha confiança no processo e saiba exatamente o que está acontecendo.
+  
+  === CRITÉRIOS DE ACEITAÇÃO ===
+  
+  A. Segurança - Proteção contra XSS:
+  - Dado que estou inserindo um cupom de desconto
+  - Quando digito qualquer texto (incluindo scripts)
+  - Então o sistema deve sanitizar a entrada
+  - E não deve executar scripts maliciosos
+  - E deve exibir apenas texto
+  (...)
+
+--------------------------------------------------------------------------------
+[AVALIAÇÃO F1]
+  F1=0.00 ✗  |  Precision=0.00  |  Recall=0.00
+  Reasoning: Erro na avaliação: Connection error.
+
+================================================================================
+EXEMPLO 3  |  latência: 4.572s  |  tokens: 5019
+================================================================================
+
+[BUG REPORT]
+  App Android trava ao carregar lista de notificações com mais de 50 itens.
+  
+  Observações:
+  - Tela fica congelada por 5-10 segundos
+  - ANR (Application Not Responding) em alguns casos
+  - Lista não está usando paginação
+  - Carrega tudo de uma vez na Thread principal
+
+--------------------------------------------------------------------------------
+[OUTPUT DO MODELO]
+  Como um usuário do app Android, eu quero que a lista de notificações carregue rapidamente, para que eu possa acessar minhas notificações sem atrasos ou travamentos.
+  
+  Critérios de Aceitação:
+  - Dado que estou na tela de notificações
+  - Quando a lista contém mais de 50 itens
+  - Então a lista deve carregar em menos de 2 segundos
+  - E não deve ocorrer congelamento da tela
+  - E não deve haver ANR durante o carregamento
+  
+  Critérios Técnicos:
+  - Implementar paginação para carregar notificações em lotes
+  - Usar background thread para evitar bloqueio da Thread principal
+  
+  Contexto do Bug:
+  - Problema: Tela congela por 5-10 segundos ao carregar mais de 50 itens
+  - Impacto: Experiência do usuário prejudicada, com risco de ANR
+  - Cenário crítico: Usuários acessando a lista simultaneamente, causando travamentos ad
+  (...)
+
+--------------------------------------------------------------------------------
+[REFERÊNCIA]
+  Como um usuário do app Android, eu quero visualizar minhas notificações rapidamente sem travamentos, para que eu possa acessar informações importantes sem frustrações.
+  
+  Critérios de Aceitação:
+  - Dado que tenho mais de 50 notificações
+  - Quando abro a tela de notificações
+  - Então a tela deve carregar em menos de 2 segundos
+  - E não deve ocorrer congelamento da interface
+  - E não deve aparecer mensagem de ANR
+  
+  Critérios Técnicos:
+  - Implementar paginação (carregar 20 itens por vez)
+  - Carregar dados em background thread
+  - Usar RecyclerView com ViewHolder pattern
+  - Implementar scroll infinito para carregar mais itens
+  
+  Contexto do Bug:
+  - Problema: lista sem paginação carregando na Thread principal
+  - Sintoma: ANR após 50+ itens
+  - Tempo de tela congelada: 5-10 segundos
+
+--------------------------------------------------------------------------------
+[AVALIAÇÃO F1]
+  F1=0.00 ✗  |  Precision=0.00  |  Recall=0.00
+  Reasoning: Erro na avaliação: Connection error.
+
+================================================================================
+EXEMPLO 4  |  latência: 5.056s  |  tokens: 5105
+================================================================================
+
+[BUG REPORT]
+  Carrinho permite finalizar compra mesmo com produto fora de estoque.
+  
+  Fluxo do bug:
+  1. Produto tem 2 unidades em estoque
+  2. Cliente A adiciona 2 unidades ao carrinho
+  3. Estoque fica zerado
+  4. Cliente B ainda consegue adicionar ao carrinho
+  5. Cliente B finaliza compra
+  6. Sistema gera pedido mas não tem estoque para enviar
+
+--------------------------------------------------------------------------------
+[OUTPUT DO MODELO]
+  Como o sistema de gerenciamento de estoque, eu quero garantir que a finalização da compra não seja permitida quando o produto estiver fora de estoque, para que não haja pedidos gerados sem disponibilidade de envio.
+  
+  Critérios de Aceitação:
+  - Dado que um produto tem 2 unidades em estoque
+  - Quando o Cliente A adiciona 2 unidades ao carrinho
+  - Então o estoque deve ser atualizado para zero
+  - E o Cliente B não deve conseguir adicionar o produto ao carrinho
+  - E ao tentar finalizar a compra, deve exibir um aviso de que o produto está fora de estoque
+  
+  Critérios de Prevenção:
+  - Quando o produto ficar indisponível
+  - E houver outros usuários em processo de finalização de compra
+  - Então deve exibir aviso de indisponibilidade ao tentar finalizar a compra
+  - E deve reservar o produto temporariamente para
+  (...)
+
+--------------------------------------------------------------------------------
+[REFERÊNCIA]
+  Como o sistema de e-commerce, eu quero validar disponibilidade de estoque antes de permitir finalização de compra, para que não sejam criados pedidos que não podem ser atendidos.
+  
+  Critérios de Aceitação:
+  - Dado que um produto está no carrinho
+  - Quando o cliente tenta finalizar a compra
+  - Então o sistema deve validar estoque disponível em tempo real
+  - E se o produto estiver fora de estoque, deve bloquear a compra
+  - E deve exibir mensagem clara sobre a indisponibilidade
+  - E deve sugerir remover o item ou aguardar reposição
+  
+  Critérios de Prevenção:
+  - Quando produto ficar sem estoque
+  - E houver itens em carrinhos de outros clientes
+  - Então deve exibir aviso "estoque limitado" ao adicionar
+  - E deve reservar estoque temporariamente (15 minutos) ao ir para checkout
+  
+  Contexto do Bug:
+  - Problema: v
+  (...)
+
+--------------------------------------------------------------------------------
+[AVALIAÇÃO F1]
+  F1=0.00 ✗  |  Precision=0.00  |  Recall=0.00
+  Reasoning: Erro na avaliação: Connection error.
+
+================================================================================
+EXEMPLO 5  |  latência: 5.889s  |  tokens: 5093
+================================================================================
+
+[BUG REPORT]
+  Pipeline de vendas calcula valor total errado quando há desconto.
+  
+  Cenário:
+  - Produto A: R$ 1.000
+  - Produto B: R$ 500
+  - Desconto: 10%
+  - Valor esperado: R$ 1.350
+  - Valor mostrado: R$ 1.400
+  
+  O sistema aplica desconto só no primeiro produto.
+
+--------------------------------------------------------------------------------
+[OUTPUT DO MODELO]
+  Como um vendedor gerenciando oportunidades no pipeline, eu quero que o cálculo do valor total considere todos os produtos e descontos corretamente, para que eu possa apresentar valores precisos aos clientes e evitar confusões.
+  
+  Critérios de Aceitação:
+  - Dado que adiciono o Produto A e o Produto B ao pipeline
+  - Quando aplico um desconto de 10%
+  - Então o valor total deve ser R$ 1.350
+  - E o detalhamento deve mostrar: subtotal, desconto e total
+  - E o sistema deve aplicar o desconto a todos os produtos
+  
+  Exemplo de Cálculo:
+  - Subtotal: R$ 1.000 (Produto A) + R$ 500 (Produto B) = R$ 1.500
+  - Desconto: 10% de R$ 1.500 = R$ 150
+  - Total esperado: R$ 1.500 - R$ 150 = R$ 1.350
+  
+  Contexto Técnico:
+  - Problema identificado: desconto aplicado apenas no primeiro produto
+  - Valor mostrado: R$ 1.400
+  - Valor esp
+  (...)
+
+--------------------------------------------------------------------------------
+[REFERÊNCIA]
+  Como um vendedor gerenciando oportunidades no pipeline, eu quero que o valor total seja calculado corretamente quando aplico descontos, para que eu possa apresentar propostas precisas aos clientes.
+  
+  Critérios de Aceitação:
+  - Dado que tenho uma oportunidade com múltiplos produtos
+  - Quando aplico um desconto percentual
+  - Então o desconto deve ser aplicado no valor total de todos os produtos
+  - E o valor final deve ser: (soma dos produtos) × (1 - desconto%)
+  - E o detalhamento deve mostrar: subtotal, desconto e total
+  
+  Exemplo de Cálculo:
+  - Produto A: R$ 1.000
+  - Produto B: R$ 500
+  - Subtotal: R$ 1.500
+  - Desconto 10%: -R$ 150
+  - Total: R$ 1.350
+  
+  Contexto Técnico:
+  - Bug atual: desconto sendo aplicado apenas no primeiro produto
+  - Resultado incorreto: R$ 1.400 (deveria ser R$ 1.350)
+
+--------------------------------------------------------------------------------
+[AVALIAÇÃO F1]
+  F1=0.00 ✗  |  Precision=0.00  |  Recall=0.00
+  Reasoning: Erro na avaliação: Connection error.
+
+================================================================================
+EXEMPLO 6  |  latência: 5.709s  |  tokens: 5065
+================================================================================
+
+[BUG REPORT]
+  Endpoint /api/users/:id retorna dados de qualquer usuário sem validar permissões.
+  
+  Exemplo:
+  - Usuário comum (ID 100) consegue acessar GET /api/users/1 (admin)
+  - Recebe email, telefone, endereço do admin
+  - Apenas admins deveriam ver dados de outros usuários
+  
+  Severidade: ALTA - vazamento de dados pessoais
+
+--------------------------------------------------------------------------------
+[OUTPUT DO MODELO]
+  Como o sistema de gestão de usuários, eu quero controlar o acesso aos dados de perfil por ID, para que informações pessoais sejam acessíveis apenas pelo próprio usuário ou por administradores autorizados.
+  
+  Critérios de Aceitação:
+  - Dado que um usuário autenticado tenta acessar GET /api/users/{id} de outro usuário
+  - Quando o sistema valida as permissões
+  - Então deve retornar HTTP 403 Forbidden
+  - E apenas devo poder acessar meus próprios dados
+  - E administradores devem poder acessar dados de todos
+  
+  Critérios Adicionais para Administradores:
+  - Dado que um administrador faz GET /api/users/{id}
+  - Quando o sistema identifica o papel de administrador
+  - Então deve retornar HTTP 200 com os dados completos do usuário
+  - E a ação deve ser registrada em log de auditoria
+  
+  Contexto de Segurança:
+  - Severi
+  (...)
+
+--------------------------------------------------------------------------------
+[REFERÊNCIA]
+  Como o sistema, eu quero validar permissões antes de retornar dados de usuários, para que apenas usuários autorizados possam acessar informações pessoais de outros usuários.
+  
+  Critérios de Aceitação:
+  - Dado que sou um usuário comum
+  - Quando tento acessar GET /api/users/:id de outro usuário
+  - Então devo receber HTTP 403 Forbidden
+  - E apenas devo poder acessar meus próprios dados
+  - E administradores devem poder acessar dados de todos
+  
+  Critérios Adicionais para Admins:
+  - Dado que sou um administrador
+  - Quando acesso GET /api/users/:id de qualquer usuário
+  - Então devo receber os dados completos com HTTP 200
+  - E o acesso deve ser registrado em log de auditoria
+  
+  Contexto de Segurança:
+  - Severidade: ALTA
+  - Tipo: Quebra de controle de acesso (OWASP A01:2021)
+  - Dados expostos: email, telefone, ender
+  (...)
+
+--------------------------------------------------------------------------------
+[AVALIAÇÃO F1]
+  F1=0.00 ✗  |  Precision=0.00  |  Recall=0.00
+  Reasoning: Erro na avaliação: Connection error.
+
+================================================================================
+EXEMPLO 7  |  latência: 12.20s  |  tokens: 6301
+================================================================================
+
+[BUG REPORT]
+  Sistema de relatórios gerenciais com problemas severos de performance e dados incorretos.
+  
+  CONTEXTO:
+  Aplicação SaaS B2B com 500+ empresas clientes, cada uma com 50-5000 usuários.
+  
+  PROBLEMAS:
+  
+  1. PERFORMANCE - Query N+1 no dashboard executivo:
+     - Endpoint: GET /api/reports/executive-dashboard
+     - Para cada empresa, faz query separada para buscar métricas
+     - 1 cliente com 100 departamentos = 101 queries
+     - Tempo de resposta: 45 segundos (SLA: 3s)
+     - Database CPU: 95% em horário de pico
+  
+   
+  (...)
+
+--------------------------------------------------------------------------------
+[OUTPUT DO MODELO]
+  === USER STORY PRINCIPAL ===
+  Título: Problemas de performance e dados incorretos no sistema de relatórios gerenciais
+  Descrição: Como um administrador do sistema, eu quero que o dashboard executivo funcione de forma eficiente e que os dados apresentados sejam precisos, para que eu possa confiar nas informações e tomar decisões informadas.
+  
+  === CRITÉRIOS DE ACEITAÇÃO ===
+  A. Performance:
+  - Dado que um administrador acessa o dashboard executivo
+  - Quando a requisição é feita para GET /api/reports/executive-dashboard
+  - Então o tempo de resposta deve ser inferior a 3 segundos
+  - E a carga na CPU do banco de dados deve ser mantida abaixo de 80%
+  
+  B. Lógica de Negócio:
+  - Dado que um administrador visualiza o MRR no dashboard
+  - Quando comparo com o relatório financeiro e a planilha contábil
+  - Então os
+  (...)
+
+--------------------------------------------------------------------------------
+[REFERÊNCIA]
+  Como um executivo usando o sistema de relatórios, eu quero visualizar métricas precisas e atualizadas em tempo hábil, para que eu possa tomar decisões estratégicas baseadas em dados confiáveis.
+  
+  === USER STORY PRINCIPAL ===
+  
+  Título: Sistema de relatórios gerenciais confiável e performático
+  
+  Descrição:
+  Como um usuário executivo (CEO, CFO, VP), eu quero acessar dashboards e relatórios gerenciais que sejam rápidos, precisos e consistentes em todas as fontes, para que eu possa confiar nos dados para tomada de decisão estratégica.
+  
+  === CRITÉRIOS DE ACEITAÇÃO ===
+  
+  A. Performance - Dashboard carrega em menos de 3 segundos:
+  - Dado que sou um executivo acessando o dashboard
+  - Quando carrego GET /api/reports/executive-dashboard
+  - Então a página deve carregar completamente em < 3 segundos
+  - E o datab
+  (...)
+
+--------------------------------------------------------------------------------
+[AVALIAÇÃO F1]
+  F1=0.00 ✗  |  Precision=0.00  |  Recall=0.00
+  Reasoning: Erro na avaliação: Connection error.
+
+================================================================================
+EXEMPLO 8  |  latência: 3.914s  |  tokens: 5025
+================================================================================
+
+[BUG REPORT]
+  Modal de confirmação de exclusão aparece atrás do menu lateral em telas pequenas (< 768px).
+  
+  Detalhes:
+  - z-index do modal: 1000
+  - z-index do menu lateral: 1050
+  - Usuários não conseguem clicar nos botões do modal
+  - Precisam fechar o menu lateral antes
+
+--------------------------------------------------------------------------------
+[OUTPUT DO MODELO]
+  Como um usuário em telas pequenas, eu quero que o modal de confirmação de exclusão apareça acima do menu lateral, para que eu possa interagir com os botões do modal sem precisar fechar o menu.
+  
+  Critérios de Aceitação:
+  - Dado que estou em uma tela menor que 768px
+  - Quando o modal de confirmação de exclusão é exibido
+  - Então o modal deve aparecer acima de todos os elementos da página
+  - E o menu lateral deve ficar desfocado (backdrop)
+  - E todos os controles do modal devem ser clicáveis
+  
+  Critérios de Acessibilidade:
+  - O foco do teclado deve ir para o elemento em destaque
+  - Deve ser possível fechar com ESC
+  - O backdrop deve fechar ao clicar fora do elemento
+  
+  Contexto Técnico:
+  - z-index do modal: 1000
+  - z-index do menu lateral: 1050
+  - Solução: ajustar z-index do modal para valor maior que 1050
+
+--------------------------------------------------------------------------------
+[REFERÊNCIA]
+  Como um usuário em dispositivo móvel, eu quero que modais importantes apareçam acima de todos os outros elementos, para que eu possa interagir com eles sem precisar fechar outros componentes.
+  
+  Critérios de Aceitação:
+  - Dado que estou em uma tela com largura menor que 768px
+  - Quando aciono uma ação que abre um modal de confirmação
+  - Então o modal deve aparecer acima de todos os elementos da página
+  - E o menu lateral deve ficar desfocado (backdrop)
+  - E todos os botões do modal devem ser clicáveis
+  - E o modal deve ocupar pelo menos 90% da largura da tela
+  
+  Critérios de Acessibilidade:
+  - O foco do teclado deve ir para o modal
+  - Deve ser possível fechar com ESC
+  - O backdrop deve fechar ao clicar fora
+  
+  Contexto Técnico:
+  - Bug atual: z-index modal (1000) < z-index menu (1050)
+  - Solução: ajustar z-
+  (...)
+
+--------------------------------------------------------------------------------
+[AVALIAÇÃO F1]
+  F1=0.00 ✗  |  Precision=0.00  |  Recall=0.00
+  Reasoning: Erro na avaliação: Connection error.
+
+================================================================================
+EXEMPLO 9  |  latência: 6.346s  |  tokens: 5183
+================================================================================
+
+[BUG REPORT]
+  Relatório de vendas demora mais de 2 minutos para gerar quando filtro ultrapassa 1000 registros.
+  
+  Detalhes:
+  - Query SQL está sem index na coluna data_venda
+  - Timeout do navegador após 120 segundos
+  - Usuários reclamando de lentidão no horário comercial
+
+--------------------------------------------------------------------------------
+[OUTPUT DO MODELO]
+  Como um gerente de vendas, eu quero gerar relatórios de vendas rapidamente mesmo com grandes volumes de dados, para que eu possa analisar informações sem esperar longos períodos.
+  
+  Critérios de Aceitação:
+  - Dado que solicito um relatório com mais de 1000 registros
+  - Quando aplico filtros e clico em "Gerar Relatório"
+  - Então o relatório deve ser gerado em menos de 30 segundos
+  - E não deve ocorrer timeout no navegador
+  - E o desempenho deve ser consistente em horário de pico
+  
+  Contexto Técnico:
+  - Problema identificado: falta de índice na coluna data_venda
+  - Performance atual: >120s para 1000+ registros
+  - Performance esperada: <30s para qualquer volume
+  - Sugestão: adicionar índice e otimizar query SQL
+  
+  ## Título
+  Timeout na geração de relatório de vendas acima de 1000 registros
+  
+  ## Descrição
+  Quer
+  (...)
+
+--------------------------------------------------------------------------------
+[REFERÊNCIA]
+  Como um gerente de vendas, eu quero gerar relatórios de vendas rapidamente mesmo com grandes volumes de dados, para que eu possa analisar informações sem esperar longos períodos.
+  
+  Critérios de Aceitação:
+  - Dado que solicito um relatório com mais de 1000 registros
+  - Quando aplico filtros e clico em "Gerar Relatório"
+  - Então o relatório deve ser gerado em menos de 30 segundos
+  - E não deve ocorrer timeout no navegador
+  - E o desempenho deve ser consistente em horário de pico
+  
+  Contexto Técnico:
+  - Problema identificado: falta de índice na coluna data_venda
+  - Performance atual: >120s para 1000+ registros
+  - Performance esperada: <30s para qualquer volume
+  - Sugestão: adicionar índice e otimizar query SQL
+
+--------------------------------------------------------------------------------
+[AVALIAÇÃO F1]
+  F1=0.00 ✗  |  Precision=0.00  |  Recall=0.00
+  Reasoning: Erro na avaliação: Connection error.
+
+================================================================================
+EXEMPLO 10  |  latência: 2.954s  |  tokens: 5007
+================================================================================
+
+[BUG REPORT]
+  Webhook de pagamento aprovado não está sendo chamado.
+  
+  Steps to reproduce:
+  1. Fazer pedido de R$ 100
+  2. Pagar com cartão de crédito
+  3. Pagamento é aprovado no gateway
+  4. Sistema não recebe notificação
+  5. Status do pedido fica como "pendente"
+  
+  Logs do gateway mostram: HTTP 500 ao tentar POST /api/webhooks/payment
+
+--------------------------------------------------------------------------------
+[OUTPUT DO MODELO]
+  Como o sistema de gestão de pedidos, eu quero receber notificações de pagamento aprovado, para que o status do pedido seja atualizado corretamente e os clientes sejam informados.
+  
+  Critérios de Aceitação:
+  - Dado que um pagamento é aprovado no gateway
+  - Quando o gateway envia POST para /api/webhooks/payment
+  - Então o endpoint deve retornar HTTP 200
+  - E o status do pedido deve mudar de pendente para aprovado
+  - E o cliente deve receber email de confirmação
+  - E o sistema deve logar o evento para auditoria
+  
+  Contexto Técnico:
+  - Problema identificado: erro HTTP 500 ao tentar POST /api/webhooks/payment
+  - Ação necessária: investigar e corrigir a causa do erro no endpoint de webhook.
+
+--------------------------------------------------------------------------------
+[REFERÊNCIA]
+  Como o sistema de e-commerce, eu quero receber notificações de pagamento aprovado via webhook, para que o status dos pedidos seja atualizado automaticamente após confirmação do pagamento.
+  
+  Critérios de Aceitação:
+  - Dado que um pagamento é aprovado no gateway
+  - Quando o gateway envia POST para /api/webhooks/payment
+  - Então o endpoint deve retornar HTTP 200
+  - E o status do pedido deve mudar de "pendente" para "aprovado"
+  - E o cliente deve receber email de confirmação
+  - E o sistema deve logar o evento para auditoria
+  
+  Contexto Técnico:
+  - Endpoint está retornando HTTP 500
+  - Gateway: [nome do gateway de pagamento]
+  - Logs indicam falha no processamento do webhook
+
+--------------------------------------------------------------------------------
+[AVALIAÇÃO F1]
+  F1=0.00 ✗  |  Precision=0.00  |  Recall=0.00
+  Reasoning: Erro na avaliação: Connection error.
+
+================================================================================
+RESUMO
+================================================================================
+  Ex        F1       P       R
+  ----------------------------
+  1     0.00 ✗  0.00  0.00
+  2     0.00 ✗  0.00  0.00
+  3     0.00 ✗  0.00  0.00
+  4     0.00 ✗  0.00  0.00
+  5     0.00 ✗  0.00  0.00
+  6     0.00 ✗  0.00  0.00
+  7     0.00 ✗  0.00  0.00
+  8     0.00 ✗  0.00  0.00
+  9     0.00 ✗  0.00  0.00
+  10    0.00 ✗  0.00  0.00
+  ----------------------------
+  MÉDIA  0.00    ✗
+
+  Piores exemplos: [1, 2, 3]
+================================================================================

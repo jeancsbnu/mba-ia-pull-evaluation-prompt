@@ -1,0 +1,552 @@
+================================================================================
+EX 1
+================================================================================
+
+[BUG REPORT]
+App de produtividade offline-first com bugs críticos de sincronização.
+
+CONTEXTO:
+App mobile (iOS + Android) que funciona offline e sincroniza quando tem internet.
+Usuários: vendedores em campo, muitas vezes sem conexão.
+
+PROBLEMAS REPORTADOS:
+
+1. CONFLITO DE DADOS - Merge incorreto causa perda de dados:
+
+   Cenário:
+   - Usuário A (offline) edita tarefa #123: "Ligar para cliente X às 14h"
+   - Usuário B (offline) edita mesma tarefa: "Ligar para cliente X às 15h (reagendado)"
+   - Ambos sincronizam
+   - Sistema aplica "last write wins" → dados do usuário A perdidos
+   - Usuário A não sabe que seu agendamento foi sobrescrito
+
+   Impacto: 30+ casos de compromissos perdidos na última semana
+
+2. SINCRONIZAÇÃO - Upload infinito de anexos grandes:
+
+   Cenário:
+   - Usuário anexa PDF de 50MB em uma tarefa
+   - Inicia upload via 4G
+   - Conexão cai no meio (sinal fraco)
+   - App reinicia upload do zero (não retoma)
+   - Após 5 tentativas, desiste mas não avisa o usuário
+   - Tarefa fica "sincronizada" mas sem anexo
+
+   Logs:
+   ```
+   [SYNC] Uploading attachment.pdf (50MB)... 40% complete
+   [NETWORK] Connection lost
+   [SYNC] Retry 1/5 - Restarting from 0%
+   [SYNC] Uploading attachment.pdf (50MB)... 35% complete
+   [NETWORK] Connection lost
+   [SYNC] Retry 2/5 - Restarting from 0%
+   ...
+   [SYNC] Max retries exceeded. Giving up.
+   [ERROR] Upload failed but status marked as synced
+   ```
+
+3. ORDENAÇÃO - Operações aplicadas fora de ordem no servidor:
+
+   Cenário offline (usuário sem internet por 2 horas):
+   - 10:00 - Cria tarefa "Tarefa A"
+   - 10:15 - Edita "Tarefa A" → "Tarefa A - Urgente"
+   - 10:30 - Deleta "Tarefa A"
+
+   Ao sincronizar:
+   - Servidor recebe DELETE antes do CREATE (ordem errada)
+   - Tenta deletar tarefa que não existe → erro 404
+   - CREATE e UPDATE são aplicados depois
+   - Resultado: tarefa existe (deveria estar deletada)
+   - Timestamp client-side não é respeitado
+
+4. MEMÓRIA - App crasha ao sincronizar 1000+ itens pendentes:
+
+   Cenário:
+   - Usuário fica 1 semana offline
+   - Acumula 1.500 operações pendentes (create, update, delete)
+   - Volta para área com WiFi
+   - App tenta sincronizar tudo de uma vez
+   - Carrega todos os 1.500 itens na memória
+   - iOS: Memory Warning → App crashado pelo OS
+   - Android: OutOfMemoryError
+
+   Memória medida: 850MB (limite iOS: 700MB)
+
+IMPACTO:
+- 250+ usuários afetados
+- NPS caiu de 8.5 para 4.2
+- 80% dos reviews negativos mencionam "perda de dados"
+- Churn rate aumentou 15% no último mês
+- Time de vendas perdeu R$ 200k em oportunidades por dados perdidos
+
+[OUTPUT ATUAL]
+Como um usuário mobile trabalhando frequentemente offline, eu quero que o sistema de sincronização funcione corretamente, para que eu possa manter meus dados atualizados e evitar perda de informações importantes.
+
+=== USER STORY PRINCIPAL ===
+
+Título: Sincronização confiável e eficiente para usuários offline
+
+Descrição:
+Como um usuário mobile, eu quero que o sistema de sincronização trate conflitos de dados, retome uploads de anexos grandes, respeite a ordem das operações e evite crashes por uso excessivo de memória, para que eu possa trabalhar sem perder dados e sem interrupções.
+
+=== CRITÉRIOS DE ACEITAÇÃO ===
+
+A. Conflito de Dados - Merge correto:
+- Dado que dois usuários A e B estão offline e editam a mesma tarefa
+- Quando ambos sincronizam suas alterações
+- Então o sistema deve aplicar um mecanismo de merge que preserve as alterações de ambos
+- E o usuário A deve ser notificado se sua alteração foi sobrescrita
+- E não deve haver perda de dados entre as edições
+
+B. Sincronização - Upload de anexos grandes:
+- Dado que um usuário anexa um arquivo PDF de 50MB
+- Quando a conexão de internet é perdida durante o upload
+- Então o sistema deve retomar o upload do ponto onde parou
+- E deve notificar o usuário sobre o status do upload
+- E a tarefa deve ser marcada como "sincronizada" apenas quando o upload for concluído com sucesso
+
+C. Ordenação - Aplicação correta das operações:
+- Dado que um usuário cria, edita e deleta uma tarefa enquanto está offline
+- Quando o usuário sincroniza as operações
+- Então o sistema deve aplicar as operações na ordem correta
+- E não deve gerar erro 404 ao tentar deletar uma tarefa que não existe
+- E o timestamp client-side deve ser respeitado para garantir a integridade dos dados
+
+D. Memória - Evitar crashes ao sincronizar:
+- Dado que um usuário tem 1.500 operações pendentes
+- Quando o usuário volta a ter conexão e tenta sincronizar
+- Então o sistema deve processar as operações em lotes para evitar uso excessivo de memória
+- E não deve exceder o limite de memória do dispositivo (700MB para iOS)
+- E deve notificar o usuário se a sincronização não puder ser concluída devido a limitações de memória
+
+=== CONTEXTO DO BUG ===
+
+Severidade: CRÍTICA
+Impacto: 250+ usuários afetados, NPS caiu de 8.5 para 4.2, churn rate aumentou 15%, perda de R$ 200k em oportunidades.
+Problemas Técnicos:
+1. Merge incorreto causa perda de dados entre usuários.
+2. Upload de anexos grandes não retoma após falha de conexão.
+3. Operações aplicadas fora de ordem resultam em erros e inconsistências.
+4. Crashes devido ao uso excessivo de memória durante a sincronização.
+
+[REFERÊNCIA]
+Como um vendedor usando o app em campo, eu quero que minhas alterações offline sejam sincronizadas de forma confiável sem perda de dados, para que eu possa trabalhar com tranquilidade mesmo em áreas sem conexão.
+
+=== USER STORY PRINCIPAL ===
+
+Título: Sincronização confiável e resiliente para operações offline
+
+Descrição:
+Como um usuário mobile trabalhando frequentemente offline, eu quero que todas as minhas alterações sejam sincronizadas corretamente quando houver conexão, sem perda de dados, conflitos mal resolvidos ou crashes, para que eu possa confiar no app como ferramenta crítica de trabalho.
+
+=== CRITÉRIOS DE ACEITAÇÃO ===
+
+A. Conflitos - Resolução inteligente com aviso ao usuário:
+- Dado que dois usuários editam a mesma tarefa offline
+- Quando ambos sincronizam
+- Então o sistema deve detectar o conflito
+- E deve criar uma cópia de backup da versão conflitante
+- E deve notificar ambos os usuários sobre o conflito
+- E deve permitir escolher qual versão manter manualmente
+
+B. Upload Resiliente - Retomada de upload de anexos grandes:
+- Dado que estou enviando um anexo de 50MB
+- Quando a conexão cai durante o upload
+- Então o app deve salvar o progresso (checkpoints a cada 5MB)
+- E ao reconectar, deve retomar do último checkpoint
+- E deve mostrar progresso em tempo real
+- E se falhar após 5 tentativas, deve manter na fila e avisar o usuário
+
+C. Ordenação Garantida - Operações aplicadas na ordem correta:
+- Dado que realizo múltiplas operações offline em sequência
+- Quando sincronizo com o servidor
+- Então as operações devem ser aplicadas na ordem cronológica correta
+- E cada operação deve ter timestamp do cliente
+- E o servidor deve respeitar a ordem baseada no timestamp
+- E operações dependentes (create → update → delete) devem ser atômicas
+
+D. Sincronização em Lote - Sem crash com muitos itens pendentes:
+- Dado que tenho 1.500 operações pendentes após 1 semana offline
+- Quando inicio a sincronização
+- Então o app deve processar em lotes de 50 itens
+- E deve liberar memória entre lotes
+- E não deve ultrapassar 500MB de memória
+- E deve mostrar progresso (ex: "Sincronizando 150/1500")
+- E deve permitir pausar/retomar a sincronização
+
+=== CRITÉRIOS TÉCNICOS ===
+
+Resolução de Conflitos - CRDT ou Vector Clocks:
+- Implementar CRDTs (Conflict-free Replicated Data Types) OU
+- Vector clocks para detectar conflitos
+- Estratégia híbrida:
+  * Auto-merge: campos independentes (ex: título + descrição)
+  * Manual: campos conflitantes (ex: horário de reunião)
+- Manter histórico de versões para rollback
+
+Upload Resiliente - Chunked Upload com Checkpoints:
+```
+Protocolo:
+1. Dividir arquivo em chunks de 5MB
+2. POST /api/uploads/initiate → retorna upload_id
+3. PUT /api/uploads/{upload_id}/chunk/{n} para cada chunk
+4. POST /api/uploads/{upload_id}/complete quando terminar
+5. Se falhar, GET /api/uploads/{upload_id}/status para saber último chunk
+6. Retomar do próximo chunk não enviado
+```
+
+Ordenação - Operation Log com Timestamps:
+```
+Estrutura de operação:
+{
+  "id": "uuid-v4",
+  "type": "CREATE|UPDATE|DELETE",
+  "entity": "task",
+  "entity_id": "123",
+  "data": {...},
+  "client_timestamp": "2025-01-15T10:30:00Z",
+  "device_id": "abc123"
+}
+
+Servidor aplica em ordem de client_timestamp (não ordem de chegada)
+```
+
+Sincronização em Lote - Batch Processing:
+```
+Algoritmo:
+1. Contar operações pendentes: N
+2. Dividir em lotes de 50: batches = ceil(N / 50)
+3. Para cada lote:
+   a. Carregar 50 operações do SQLite local
+   b. Enviar para servidor: POST /api/sync/batch
+   c. Marcar como sincronizado no local
+   d. Liberar memória (clear cache)
+   e. Atualizar UI: "Lote X de Y completo"
+4. Ao completar tudo, mostrar "Sincronização completa"
+
+Rate limiting: máx 5 lotes por segundo
+Retry: exponential backoff (1s, 2s, 4s, 8s, 16s)
+```
+
+Memória - Streaming e Garbage Collection:
+- Usar SQLite cursor (não carregar tudo na memória)
+- Processar registros em streaming
+- Force GC após cada lote
+- Monitorar memória: se > 400MB, pausar sync
+
+=== CONTEXTO DO BUG ===
+
+Severidade: CRÍTICA (Perda de dados em produção)
+
+Impacto Business:
+- 250+ usuários afetados
+- NPS: 8.5 → 4.2
+- Churn +15%
+- Perda de R$ 200k em oportunidades
+
+Problemas Técnicos:
+1. Last-write-wins sem detecção de conflito
+2. Upload não suporta resumable uploads
+3. Operações aplicadas fora de ordem
+4. Sync carrega tudo na memória (OOM)
+
+App Architecture:
+- Frontend: React Native (iOS + Android)
+- Local DB: SQLite com WatermelonDB
+- Backend: Node.js + PostgreSQL
+- Sync Protocol: REST API (substituir por GraphQL + subscriptions?)
+
+=== TASKS TÉCNICAS SUGERIDAS ===
+
+Fase 1 - Hotfix Urgente (3 dias):
+1. [MEMORY] Implementar sync em lotes de 50 itens
+2. [UPLOAD] Adicionar retry exponential backoff
+3. [MONITOR] Adicionar logging de erros de sync
+
+Fase 2 - Core Fixes (2 semanas):
+4. [CONFLICT] Implementar detecção de conflitos básica
+5. [CONFLICT] UI para resolver conflitos manualmente
+6. [UPLOAD] Implementar chunked upload com resumable
+7. [ORDER] Adicionar client_timestamp em todas operações
+8. [ORDER] Servidor aplicar ops em ordem de timestamp
+
+Fase 3 - Robust Architecture (3 semanas):
+9. [CONFLICT] Migrar para CRDTs para auto-merge
+10. [SYNC] Implementar operation log persistente
+11. [PERF] Otimizar queries SQLite (índices)
+12. [MONITOR] Dashboard de sync health
+
+Fase 4 - Scale & Polish (1 semana):
+13. [UX] Melhorar feedback de progresso de sync
+14. [UX] Permitir pausar/retomar sync
+15. [TESTS] Testes de sync com 10k+ operações
+16. [DOCS] Documentar arquitetura de sync
+
+=== MÉTRICAS DE SUCESSO ===
+
+Antes vs Depois:
+- Perda de dados: 30 casos/semana → 0 casos/semana
+- Crash rate em sync: 15% → < 1%
+- NPS: 4.2 → > 7.5
+- Sync success rate: 75% → > 99%
+- Tempo de sync (1000 itens): crash → < 60s
+- Memória durante sync: 850MB → < 500MB
+
+================================================================================
+EX 2
+================================================================================
+
+[BUG REPORT]
+Sistema de relatórios gerenciais com problemas severos de performance e dados incorretos.
+
+CONTEXTO:
+Aplicação SaaS B2B com 500+ empresas clientes, cada uma com 50-5000 usuários.
+
+PROBLEMAS:
+
+1. PERFORMANCE - Query N+1 no dashboard executivo:
+   - Endpoint: GET /api/reports/executive-dashboard
+   - Para cada empresa, faz query separada para buscar métricas
+   - 1 cliente com 100 departamentos = 101 queries
+   - Tempo de resposta: 45 segundos (SLA: 3s)
+   - Database CPU: 95% em horário de pico
+
+   Stack trace:
+   ```
+   SELECT * FROM metrics WHERE company_id = ?  (executado 100x)
+   SELECT * FROM users WHERE company_id = ?     (executado 100x)
+   SELECT * FROM licenses WHERE company_id = ?  (executado 100x)
+   ```
+
+2. LÓGICA DE NEGÓCIO - Cálculo de MRR (Monthly Recurring Revenue) inconsistente:
+   - Dashboard mostra: R$ 150.000 MRR
+   - Relatório financeiro: R$ 145.000 MRR
+   - Planilha contábil: R$ 147.500 MRR
+
+   Causas identificadas:
+   - Dashboard: considera cancelamentos do mês anterior
+   - Relatório: só considera assinaturas ativas
+   - Contábil: considera pró-rata de upgrades/downgrades
+   - Nenhuma fonte está 100% correta
+
+3. CACHE - Cache Redis desatualizado causa dados old:
+   - TTL do cache: 24 horas
+   - Cliente faz upgrade de plano
+   - Dashboard ainda mostra plano antigo por até 24h
+   - Invalidação manual não funciona corretamente
+
+4. CONCORRÊNCIA - Exportação de CSV trava servidor:
+   - Exportar relatório anual (365 dias, 50k linhas)
+   - Process fica em 100% CPU por 5 minutos
+   - Outras requisições ficam lentas
+   - Memória cresce até 4GB (limite: 2GB) → OOM Kill
+
+IMPACTO BUSINESS:
+- 15 clientes enterprise ameaçando cancelar contrato
+- CEO não confia nos números para apresentar ao board
+- Time de CS gastando 40h/semana explicando discrepâncias
+- Impossível fazer forecasting confiável
+
+[OUTPUT ATUAL]
+Como um usuário executivo (CEO, CFO, VP), eu quero que o sistema de relatórios gerenciais funcione de forma eficiente e precisa, para que eu possa tomar decisões informadas e confiáveis para a empresa.
+
+=== USER STORY PRINCIPAL ===
+
+Título: Melhoria na performance e precisão dos relatórios gerenciais
+
+Descrição:
+Como um usuário executivo (CEO, CFO, VP), eu quero que o sistema de relatórios gerenciais processe dados rapidamente, calcule corretamente o MRR e mantenha informações atualizadas, para que eu possa confiar nas métricas apresentadas e evitar cancelamentos de contratos.
+
+=== CRITÉRIOS DE ACEITAÇÃO ===
+
+A. Performance - Redução do tempo de resposta do dashboard:
+- Dado que um usuário acessa o endpoint GET /api/reports/executive-dashboard
+- Quando a requisição é feita
+- Então o tempo de resposta deve ser inferior a 3 segundos
+- E a CPU do banco de dados não deve ultrapassar 70% durante o acesso
+- E o número de queries deve ser reduzido para no máximo 10 por requisição
+- E o sistema deve ser capaz de lidar com 500+ requisições simultâneas
+
+B. Lógica de Negócio - Cálculo consistente de MRR:
+- Dado que um usuário acessa o dashboard de MRR
+- Quando o cálculo é realizado
+- Então o valor exibido deve ser consistente com o relatório financeiro e a planilha contábil
+- E o dashboard deve considerar apenas assinaturas ativas
+- E deve incluir cancelamentos e pró-rata de upgrades/downgrades corretamente
+- E o usuário deve ser capaz de visualizar a origem de cada valor calculado
+
+C. Cache - Atualização do cache Redis:
+- Dado que um cliente faz um upgrade de plano
+- Quando a atualização é realizada
+- Então o cache deve ser invalidado imediatamente
+- E o dashboard deve refletir a mudança em tempo real
+- E o TTL do cache deve ser ajustado para 1 hora
+- E deve haver um mecanismo de verificação para garantir que o cache não esteja desatualizado
+
+D. Concorrência - Exportação de CSV otimizada:
+- Dado que um usuário solicita a exportação de um relatório anual
+- Quando a exportação é iniciada
+- Então o processo deve ser executado em background sem travar o servidor
+- E a utilização de CPU não deve ultrapassar 70% durante a exportação
+- E a memória utilizada deve ser limitada a 2GB
+- E o usuário deve receber uma notificação quando a exportação estiver concluída
+
+=== CRITÉRIOS TÉCNICOS ===
+
+Performance - Otimização de queries:
+- Implementar Eager loading com JOIN para evitar N+1 queries
+- Criar índices nas colunas mais utilizadas nas queries
+- Monitorar e ajustar a performance do banco de dados em horários de pico
+
+Exemplo de query otimizada:
+```sql
+SELECT m.*, u.*, l.*
+FROM metrics m
+JOIN users u ON u.company_id = m.company_id
+JOIN licenses l ON l.company_id = m.company_id
+WHERE m.company_id = ?;
+```
+
+Cache - Invalidação automática:
+- Implementar lógica de invalidação do cache após atualizações de plano
+- Ajustar TTL do cache para 1 hora
+- Monitorar a validade do cache e implementar alertas para dados desatualizados
+
+Concorrência - Processamento assíncrono:
+- Implementar job queue para exportação de relatórios (ex: Bull ou Sidekiq)
+- Dividir a exportação em lotes de 10.000 linhas
+- Implementar notificações para o usuário ao concluir a exportação
+
+=== CONTEXTO DO BUG ===
+
+Severidade: ALTA
+Impacto: 15 clientes enterprise ameaçando cancelar contrato, CEO sem confiança nos números, time de CS gastando 40h/semana em explicações.
+Problemas Técnicos:
+1. Tempo de resposta do dashboard em 45 segundos (SLA: 3s) devido a N+1 queries.
+2. Cálculo de MRR inconsistente entre dashboard, relatórios financeiros e planilhas contábeis.
+3. Cache Redis desatualizado causando exibição de dados antigos por até 24h.
+4. Exportação de CSV travando o servidor com uso excessivo de CPU e memória.
+
+[REFERÊNCIA]
+Como um executivo usando o sistema de relatórios, eu quero visualizar métricas precisas e atualizadas em tempo hábil, para que eu possa tomar decisões estratégicas baseadas em dados confiáveis.
+
+=== USER STORY PRINCIPAL ===
+
+Título: Sistema de relatórios gerenciais confiável e performático
+
+Descrição:
+Como um usuário executivo (CEO, CFO, VP), eu quero acessar dashboards e relatórios gerenciais que sejam rápidos, precisos e consistentes em todas as fontes, para que eu possa confiar nos dados para tomada de decisão estratégica.
+
+=== CRITÉRIOS DE ACEITAÇÃO ===
+
+A. Performance - Dashboard carrega em menos de 3 segundos:
+- Dado que sou um executivo acessando o dashboard
+- Quando carrego GET /api/reports/executive-dashboard
+- Então a página deve carregar completamente em < 3 segundos
+- E o database CPU deve ficar abaixo de 70% mesmo em horário de pico
+- E deve funcionar para empresas com até 10.000 usuários
+
+B. Dados Consistentes - MRR igual em todas as fontes:
+- Dado que consulto o MRR (Monthly Recurring Revenue)
+- Quando verifico dashboard, relatório financeiro e API
+- Então o valor deve ser idêntico em todas as fontes
+- E deve seguir a regra de negócio acordada (documentada)
+- E deve considerar: assinaturas ativas + pró-rata de mudanças
+
+C. Cache Inteligente - Dados sempre atualizados:
+- Dado que um cliente faz upgrade/downgrade de plano
+- Quando acesso o dashboard em até 30 segundos após a mudança
+- Então devo ver os dados atualizados
+- E o cache deve ser invalidado automaticamente
+- E dados críticos (MRR, Active Users) não devem usar cache > 5min
+
+D. Exportação Assíncrona - CSV não trava servidor:
+- Dado que solicito exportação de relatório anual
+- Quando clico em "Exportar para CSV"
+- Então a exportação deve processar em background
+- E devo receber notificação quando concluir
+- E outras requisições não devem ser afetadas
+- E o servidor não deve ultrapassar 80% de memória
+
+=== CRITÉRIOS TÉCNICOS ===
+
+Performance - Resolver N+1:
+- Implementar eager loading com JOIN
+- Reduzir 300 queries para 3 queries agregadas
+- Usar materialized views para métricas complexas
+- Adicionar índices compostos nas FKs mais usadas
+
+Exemplo de query otimizada:
+```sql
+SELECT
+  c.id, c.name,
+  COUNT(DISTINCT u.id) as user_count,
+  COUNT(DISTINCT l.id) as license_count,
+  SUM(m.revenue) as total_revenue
+FROM companies c
+LEFT JOIN users u ON u.company_id = c.id
+LEFT JOIN licenses l ON l.company_id = c.id
+LEFT JOIN metrics m ON m.company_id = c.id
+WHERE c.id = ?
+GROUP BY c.id, c.name
+```
+
+Lógica de Negócio - MRR Padronizado:
+- Criar função centralizada `calculateMRR()` usada por todos
+- Regra: assinaturas ativas + pró-rata de mudanças no mês
+- Documentar fórmula no código e wiki técnica
+- Adicionar testes unitários para cada cenário
+
+Cache - Estratégia Híbrida:
+- Dados em tempo real (sem cache): MRR, Active Users, Critical Metrics
+- Dados com cache curto (5min): Dashboard counts, Statistics
+- Dados com cache longo (1h): Historical data, Completed reports
+- Implementar cache invalidation automática via eventos
+
+Exportação - Background Jobs:
+- Usar job queue (Sidekiq, Bull, ou similar)
+- Streaming de CSV (não carregar tudo na memória)
+- Limite: 1000 linhas por chunk
+- Notificação por email ou webhook quando concluir
+- Timeout: 30 minutos para qualquer exportação
+
+=== CONTEXTO DO BUG ===
+
+Severidade: CRÍTICA (Impacto financeiro e reputacional)
+
+Impacto Business:
+- 15 clientes enterprise em risco de churn
+- CEO sem confiança nos números para board
+- 40h/semana de CS explicando discrepâncias
+
+Problemas Técnicos:
+1. N+1 query problem (300 queries vs 3 necessárias)
+2. MRR calculado diferente em 3 lugares
+3. Cache de 24h muito longo + invalidação quebrada
+4. Export síncrono mata servidor
+
+SLA Atual vs Esperado:
+- Dashboard: 45s atual → 3s esperado
+- MRR consistency: 3 valores diferentes → 1 valor único
+- Cache staleness: até 24h → máx 5min para dados críticos
+- Export impact: trava servidor → zero impacto
+
+=== TASKS TÉCNICAS SUGERIDAS ===
+
+Sprint 1 - Quick Wins (1 semana):
+1. [PERF] Adicionar índices nas FKs company_id
+2. [CACHE] Reduzir TTL de 24h para 5min em métricas críticas
+3. [LOGIC] Documentar fórmula MRR acordada
+
+Sprint 2 - Core Fixes (2 semanas):
+4. [PERF] Refatorar queries para eliminar N+1
+5. [LOGIC] Centralizar cálculo MRR em função única
+6. [CACHE] Implementar invalidação automática via eventos
+7. [EXPORT] Migrar exports para background jobs
+
+Sprint 3 - Scale & Monitor (1 semana):
+8. [PERF] Criar materialized views para dashboards
+9. [MONITOR] Adicionar APM para detectar slow queries
+10. [TESTS] Testes de carga para 10k users por empresa
+11. [DOCS] Documentar arquitetura de cache e jobs
+
